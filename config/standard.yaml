@@ -10,3 +10,31 @@ security_baseline:
     - "dependabot"
     - "snyk"
     - "trivy"
+  # Optional per-scanner artifact patterns; built-in defaults are used
+  # for any scanner not listed here.
+  # scanner_artifacts:
+  #   snyk: [".snyk", ".github/workflows/*snyk*"]
+
+uat_signoff:
+  # A5 — repo-artifact tier: signoff files checked into source control.
+  # Each artifact must contain a sprint reference the sprint calendar can
+  # resolve (sprint_id: sprint-YYYY-MM-DD), a reviewer identity, and a date.
+  artifact_pattern: "docs/signoffs/*.md"
+
+deployment_history:
+  # B3 — where production deploys are marked. "releases" (GitHub Releases,
+  # latest published non-draft/non-prerelease) is the default; "tags" uses
+  # deployment tags matching tag_pattern instead. With "releases", tags are
+  # the fallback when a repo has no releases.
+  deploy_marker: "releases"
+  tag_pattern: '^v\d+\.\d+\.\d+$'
+
+traceability:
+  # C2 — spec-kit route: PRs changing files under this directory are
+  # accepted as linked when the spec file names/links its governing issue.
+  # Remove/comment out if spec-kit is not in use.
+  spec_directory: "specs/"
+  # C3 — how an external ticket is referenced from a GitHub issue
+  # (body regex, or a label with this prefix).
+  ticket_ref_pattern: '[A-Z][A-Z0-9]*-\d+'
+  ticket_label_prefix: "ticket:"

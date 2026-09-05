@@ -2,7 +2,7 @@
 
 > Automated governance, compliance auditing, and CI gating across engineering repositories.
 
-The **Navadhiti Project Hygiene System** evaluates software engineering repositories against organizational standards across six critical dimensions: infrastructure separation, CI/CD gates, UAT sign-offs, labor cost variance, security baselines, and deployment integrity.
+The **Navadhiti Project Hygiene System** evaluates software engineering repositories against organizational standards across seven critical dimensions: infrastructure separation, CI/CD gates, UAT sign-offs, labor cost variance, security baselines, deployment integrity, and bidirectional traceability (feature → issue → ticket).
 
 ---
 
@@ -25,39 +25,44 @@ The **Navadhiti Project Hygiene System** evaluates software engineering reposito
                          │      MasterAgent      │
                          │   (master_agent.py)   │
                          └──────────┬────────────┘
-                                    │
-               ┌────────────────────┴────────────────────┐
-               │ Filter: Dormant Repos (> 60 days)       │
-               ▼                                         ▼
-      ┌─────────────────┐                       ┌──────────────────┐
-      │  In-Scope Repos │                       │ Individual &     │
-      └────────┬────────┘                       │ Aggregate Reports│
-               │ Dispatches                     │ (reports/*.json) │
-               ▼                                └──────────────────┘
-      ┌─────────────────┐
-      │  ObserverAgent  │
-      └────────┬────────┘
-               │ Executes 6 Deterministic Checks
-               ├─► core/checks/environment.py     (Environment Separation)
-               ├─► core/checks/ci_gates.py        (CI/CD Branch Protection)
-               ├─► core/checks/signoff.py         (UAT Sign-off Verification)
-               ├─► core/checks/cost.py            (Headcount & Budget Variance)
-               ├─► core/checks/security.py        (SAST & Supply Chain Scanners)
-               └─► core/checks/deploy_history.py  (Deploy vs. Sign-off Gap Flag)
+                                     │
+                ┌────────────────────┴────────────────────┐
+                │ Live GitHub org discovery (A1)          │
+                │ Filter: Dormant Repos (> 60 days)       │
+                ▼                                         ▼
+       ┌─────────────────┐                       ┌───────────────────────┐
+       │  In-Scope Repos │                       │ Individual &          │
+       └────────┬────────┘                       │ Aggregate Reports     │
+                │ Dispatches                     │ + history archive     │
+                ▼                                │ + promotion state     │
+       ┌─────────────────┐                       │ (reports/)           │
+       │  ObserverAgent  │                       └───────────────────────┘
+       └────────┬────────┘
+                │ Executes 7 Deterministic Checks
+                ├─► core/checks/environment.py        (Trees API)
+                ├─► core/checks/ci_gates.py           (Branch Protection API)
+                ├─► core/checks/signoff.py            (repo signoff artifacts)
+                ├─► core/checks/cost.py               (Headcount & Budget Variance)
+                ├─► core/checks/security.py          (shared Trees API)
+                ├─► core/checks/deploy_history.py     (Releases/tags vs signoff gaps)
+                └─► core/checks/traceability_*.py     (PRs → issues → tickets)
 ```
 
 ---
 
-## The 6 Hygiene Dimensions
+## The 7 Hygiene Dimensions
 
 | Dimension | Default Weight | Description | Pass Criteria |
 | :--- | :---: | :--- | :--- |
-| **UAT Sign-off** | **40%** | Formal acceptance before deployment | Verified repository artifact (`docs/signoffs/*.md`) or approval email |
-| **Environment Separation** | **20%** | Isolation of dev, stage, and prod | Presence of Terraform workspaces, K8s namespaces, or Docker overrides |
-| **Security Baseline** | **20%** | Vulnerability scanning in CI/CD | Active Dependabot, Snyk, or Trivy configuration |
-| **CI/CD Gates** | **10%** | Pipeline merge protection | Branch protection, PR review requirements, and status checks |
+| **UAT Sign-off** | **40%** | Formal acceptance before deployment | Well-formed repo artifact (`docs/signoffs/*.md`) covering the current sprint |
+| **Environment Separation** | **20%** | Isolation of dev, stage, and prod | File tree contains Terraform workspaces, K8s namespaces, or Docker overrides |
+| **Security Baseline** | **20%** | Vulnerability scanning in CI/CD | Active Dependabot, Snyk, or Trivy configuration in the file tree |
+| **CI/CD Gates** | **10%** | Pipeline merge protection | Branch protection + ≥1 required review + required status checks |
 | **Cost Tracking** | **10%** | Labor burn vs. project budget | Headcount registered, sprint duration mapped, variance calculated |
+| **Traceability** | *unweighted (0%)* | Work traceable in both directions | Merged PRs link to existing issues; closed issues link to external tickets |
 | **Deployment History** | *Risk Flag* | Release audit & gap detection | Deployments must have a preceding approved sign-off (`gap_flag: false`) |
+
+> Traceability is live but deliberately unweighted until a human confirms its weight in `config/master.yaml` (suggested start: 10%, from the lowest-weighted dimensions). The report surfaces this decision; the system never auto-rebalances.
 
 ---
 
@@ -71,7 +76,8 @@ The **Navadhiti Project Hygiene System** evaluates software engineering reposito
 Clone the repository and set up a virtual environment:
 
 ```bash
-git clone https://github.com/mock-org/hygiene.git
+git clone https://github.com/jayanthbagare/navadhiti_hygiene.git
+cd navadhiti_hygiene
 cd hygiene
 
 # Create and activate virtual environment
@@ -83,46 +89,57 @@ pip install -r requirements.txt
 ```
 
 ### 3. Run the Evaluation
-Execute the master agent:
+Set a GitHub token (PAT with repo read access; administration read gives full CI-gate fidelity) and execute the master agent:
 
 ```bash
-python master_agent.py
+export GIT_TOKEN="ghp_..."
+python master_agent.py                       # full org run
+python master_agent.py --include org/repo    # force one repo in regardless of window
 ```
+
+The org is configured via `config/integrations.yaml` (`git_provider.org`).
 
 ### 4. Sample Output
 ```
 Starting Hygiene Master Agent (Activity Window: 60 days)
 Discovered 3 repos, 2 in scope.
-Dispatching ObserverAgent for mock-org/active-project-1...
-Dispatching ObserverAgent for mock-org/active-project-2...
+Dispatching ObserverAgent for navadhiti/service-a...
+Dispatching ObserverAgent for navadhiti/service-b...
 Reports generated in reports/ directory. Aggregate view:
 {
-  "generated_at": "2026-09-05T17:41:04.729055",
+  "generated_at": "2026-09-05T18:13:57.080510",
   "total_evaluated": 2,
+  "weight_warnings": [
+    "Traceability dimension is live but has no configured weight; ..."
+  ],
   "projects": [
     {
-      "id": "mock-org/active-project-1",
-      "score": 10.0,
-      "gap_flag": true,
-      "variance_pct": -62.66666666666667,
-      "eligible_for_enforcement": false
-    },
-    {
-      "id": "mock-org/active-project-2",
-      "score": 10.0,
+      "id": "navadhiti/service-a",
+      "score": 90.0,
       "gap_flag": false,
-      "variance_pct": -57.99999999999999,
-      "eligible_for_enforcement": false
-    }
+      "variance_pct": null,
+      "eligible_for_enforcement": false,
+      "qualifying_streak": 1,
+      "traceability_unlinked": {
+        "feature_to_issue": { "unlinked": 1, "total": 2 },
+        "issue_to_ticket": { "unlinked": 0, "total": 0 }
+      }
+    },
+    ...
+  ],
+  "excluded_repos": [
+    { "id": "navadhiti/dormant-service", "reason": "dormant: last commit 100 days ago (window 60d)" }
   ]
 }
 ```
+Scores now vary across repos based on real repository state — a repo that keeps its signoffs current, protects its default branch, and links its PRs to issues scores high; one that doesn't scores low.
 
 ### 5. Inspect Generated Reports
 The evaluation produces individual JSON records and an aggregate summary in the `reports/` folder:
-- `reports/aggregate.json` — Prioritized cross-project governance overview.
-- `reports/mock-org_active-project-1.json` — Deep breakdown of all 6 dimensions and evidence logs for project 1.
-- `reports/mock-org_active-project-2.json` — Deep breakdown for project 2.
+- `reports/aggregate.json` — Prioritized cross-project governance overview (with weight warnings and excluded-repo reasons).
+- `reports/navadhiti_service-a.json` — Deep breakdown of all 7 dimensions and evidence logs.
+- `reports/history/` — One archived aggregate per previous run (for trend narratives).
+- `reports/promotion_state.json` — Per-repo qualifying-sprint streaks (the only persisted state).
 
 ---
 
@@ -132,10 +149,10 @@ The behavior of the hygiene system is entirely data-driven via four YAML files i
 
 | File | Purpose | Key Parameters |
 | :--- | :--- | :--- |
-| [`config/master.yaml`](config/master.yaml) | Engine execution parameters & scoring weights | `activity_window_days` (default 60), `parallelism`, `weights` |
-| [`config/projects.yaml`](config/projects.yaml) | Project metadata mapping | `timesheet_code`, `mailbox_pattern`, `budget`, `headcount` |
-| [`config/standard.yaml`](config/standard.yaml) | Verifiable technical baselines | `required_artifacts` (Terraform, K8s), `required_scanners` |
-| [`config/integrations.yaml`](config/integrations.yaml) | Connection stubs for SaaS tools | GitHub API, Zoho People timesheets, Office365 email scanner |
+| [`config/master.yaml`](config/master.yaml) | Engine execution parameters, scoring weights, sprint calendar, promotion thresholds | `activity_window_days` (default 60), `parallelism`, `weights`, `sprint_calendar`, `promotion_threshold_sprints`, `require_traceability_for_promotion`, `enforcement` |
+| [`config/projects.yaml`](config/projects.yaml) | Project metadata mapping + per-repo overrides | `timesheet_code`, `mailbox_pattern`, `budget`, `headcount`, per-repo `sprint_calendar`, `overrides.activity_window_days` |
+| [`config/standard.yaml`](config/standard.yaml) | Verifiable technical baselines | `required_artifacts`, `required_scanners`, `uat_signoff.artifact_pattern`, `deployment_history` markers, `traceability` patterns |
+| [`config/integrations.yaml`](config/integrations.yaml) | Connection settings for SaaS tools | GitHub API (`org`), optional `ticketing_system`, Zoho People timesheets, Office365 email scanner |
 
 ---
 
@@ -143,17 +160,26 @@ The behavior of the hygiene system is entirely data-driven via four YAML files i
 
 | Milestone / Component | Status | Details |
 | :--- | :---: | :--- |
-| **Master Agent Discovery** | ✅ Completed | Mock discovery of 3 repos with automated activity window filtering (60 days) |
-| **Schema & Validation** | ✅ Completed | Comprehensive Pydantic v2 schemas in `core/schema.py` |
-| **Cost & Variance Check** | ✅ Live Demo | Headcount $\times$ duration $\times$ rate vs. budget calculation in `core/checks/cost.py` |
-| **Deployment Gap Check** | ✅ Live Demo | Audits release dates vs. sign-off dates in `core/checks/deploy_history.py` |
-| **Aggregate Reporting** | ✅ Completed | Multi-key sorting (Gap flag $\rightarrow$ Variance % $\rightarrow$ Score) |
-| **Live Git Provider API** | 🟡 In Roadmap | Query GitHub / GitLab REST APIs for real repository activity (see Guide) |
-| **Environment Check** | 🟡 Stubbed | Inspect repo file trees for Terraform / K8s manifests (see Guide) |
-| **CI Gate & Security Scanners** | 🟡 Stubbed | Inspect branch protection rules and security scanner configs (see Guide) |
-| **Enforcer CI Subagent** | 🟡 Stubbed | Pull request blocking gate in `sub_agents/enforcer_agent.py` |
+| **Master Agent Discovery** | ✅ Live | GitHub org-wide discovery with pagination, archived-repo exclusion, per-repo window overrides, `--include` flag (`core/git_providers.py`) |
+| **Schema & Validation** | ✅ Live | Pydantic v2 schemas for all 7 dimensions in `core/schema.py` |
+| **Environment Check** | ✅ Live | Recursive Trees API against `standard.yaml` artifact patterns; shared cached round-trip (`core/checks/environment.py`) |
+| **CI/CD Gates Check** | ✅ Live | Branch Protection API: protection + required reviews + required status checks (`core/checks/ci_gates.py`) |
+| **Security Scanners Check** | ✅ Live | Scanner artifacts via the same cached tree — Dependabot / Snyk / Trivy (`core/checks/security.py`) |
+| **UAT Signoff (repo-artifact tier)** | ✅ Live | Parses `docs/signoffs/*.md` artifacts (sprint id, reviewer, date) into `per_sprint` entries (`core/checks/signoff.py`) |
+| **Deployment Gap Check** | ✅ Live | GitHub Releases / tag-pattern timestamps vs. signoff dates; `undefined_standard` when no deploy markers exist (`core/checks/deploy_history.py`) |
+| **Traceability (7th dimension)** | ✅ Live | Merged PRs → existing issues (keyword/URL/spec-kit/commit tiers); closed issues → external tickets with best-effort verification (`core/checks/traceability_*.py`) |
+| **Sprint Calendar** | ✅ Live | Per-project and global cadences; every sprint window resolves through `core/sprint.py` |
+| **Promotion Streaks** | ✅ Live | `reports/promotion_state.json` — consecutive qualifying sprints, sprint-idempotent, threshold-gated eligibility (`core/promotion.py`) |
+| **Report History Archive** | ✅ Live | `reports/history/<timestamp>-aggregate.json` written before every aggregate overwrite |
+| **Weight Validation** | ✅ Live | Startup fails loudly unless configured weights sum to exactly 1.0 |
+| **Aggregate Reporting** | ✅ Live | Multi-key sorting (Gap flag $\rightarrow$ Variance % $\rightarrow$ Score), weight warnings, excluded-repo reasons |
+| **Enforcer CI Subagent** | ✅ Live | PR blocking gate (exit 0/1); traceability blocks new projects only, `undefined_standard` never blocks |
+| **Cost & Variance Check** | 🟡 Metadata-based | Headcount $\times$ duration $\times$ rate vs. budget from `config/projects.yaml`; live Zoho People API is the next milestone |
+| **UAT Signoff (email tier)** | 🟡 Declared, not built | `email_parsed` fallback is schema-declared but unimplemented; missing artifacts are reported honestly as `method: none` |
+| **Ticketing Verification** | 🟡 Config-gated | Runs once `ticketing_system` is configured in `config/integrations.yaml`; until then reports `undefined_standard` |
+| **GitLab / Azure Repos Providers** | 🟡 Roadmap | `GitProvider` interface is ready; new providers add classes to `core/git_providers.py` without touching the master agent |
 
-For code snippets and step-by-step instructions on implementing each roadmap phase, consult [`USAGE_AND_TECHNICAL_GUIDE.md`](USAGE_AND_TECHNICAL_GUIDE.md).
+For details and the remaining productionization phases, consult [`USAGE_AND_TECHNICAL_GUIDE.md`](USAGE_AND_TECHNICAL_GUIDE.md).
 
 ---
 

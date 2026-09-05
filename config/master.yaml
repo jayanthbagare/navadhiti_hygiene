@@ -1,9 +1,39 @@
 activity_window_days: 60
 parallelism: 4
 default_sprint_duration_days: 14
+
+# Weights must sum to exactly 1.0 — the master agent fails loudly on
+# startup if they don't (B6). traceability is deliberately NOT listed
+# yet: an unset weight is scored as 0.0 and the report flags that a
+# human needs to confirm a value (suggested start: 0.10, taken from
+# ci_cd_gates and cost_tracking). Never auto-rebalanced by the tool.
 weights:
   environment_separation: 0.2
   ci_cd_gates: 0.1
   uat_signoff: 0.4
   security_baseline: 0.2
   cost_tracking: 0.1
+
+# B1 — sprint boundaries. Global default; per-project override lives in
+# config/projects.yaml under repos.<repo>.sprint_calendar. The anchor must
+# be a real sprint-start date (the Monday a sprint began works well).
+sprint_calendar:
+  sprint_length_days: 14
+  sprint_start_date: "2026-08-24"
+
+# B2 — promotion mechanics. A repo becomes enforcement-eligible after
+# this many consecutive qualifying sprints (environment_separation pass
+# AND repo-artifact UAT signoff, tracked in reports/promotion_state.json).
+promotion_threshold_sprints: 3
+
+# C4 — when true, qualifying sprints also require both traceability
+# checks to pass before the promotion streak increments. Leave false
+# until the org decides traceability should gate promotion.
+require_traceability_for_promotion: false
+
+# C4 — Enforcer CI gate: traceability blocks merges for new projects
+# only (created at/after the cutoff date). Leave the cutoff unset to
+# disable the traceability gate entirely.
+enforcement:
+  traceability_gate_for_new_projects: true
+  new_project_cutoff_date: "2026-09-01"

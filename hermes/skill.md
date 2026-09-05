@@ -1,6 +1,6 @@
 ---
 name: navadhiti-hygiene
-description: Observes and (for promoted/new projects) enforces project hygiene across Navadhiti repos — environment separation, UAT signoff, cost variance, security baseline, deploy/signoff gaps. Invoke on schedule or when asked for a hygiene/cost/UAT status across projects.
+description: Observes and (for promoted/new projects) enforces project hygiene across Navadhiti repos — environment separation, UAT signoff, cost variance, security baseline, deploy/signoff gaps, traceability. Invoke on schedule or when asked for a hygiene/cost/UAT status across projects.
 ---
 
 # Navadhiti Hygiene Skill
@@ -43,16 +43,18 @@ this every invocation.
 ## Step 2 — Determine mode per repo
 
 For each in-scope repo, check its promotion state (tracked in
-`reports/promotion_state.yaml` or equivalent — the one piece of state this
-system persists across runs):
+`reports/promotion_state.json` — the one piece of state this system
+persists across runs):
 
-- Not yet promoted → **Observer mode**.
-- Promoted (per Phase 3 threshold in the build spec) → **Enforcer mode**,
-  though in practice Enforcer runs as a CI gate at merge time, not from
-  this scheduled skill — this skill still reports on promoted projects in
-  read-only fashion between merges.
-- New project (created after this system went live) → **Enforcer mode**
-  from day one.
+- Not yet eligible (`enforcement_eligible: false`) → **Observer mode**.
+- Eligible (qualifying streak >= `promotion_threshold_sprints` in
+  `config/master.yaml`) → **Enforcer mode**, though in practice Enforcer
+  runs as a CI gate at merge time, not from this scheduled skill — this
+  skill still reports on eligible projects in read-only fashion between
+  merges. The `qualifying_streak` in each repo's state entry shows how
+  close a project is; recommend promotion, never auto-promote.
+- New project (created after `enforcement.new_project_cutoff_date`) →
+  **Enforcer mode** from day one.
 
 ## Step 3 — Dispatch checks (sub-agent role, one per repo)
 
@@ -60,13 +62,18 @@ For each in-scope repo, run the deterministic checks by invoking the
 scripts directly — do not reimplement their logic inline:
 
 ```
-core/checks/environment.py   <repo>
-core/checks/ci_gates.py      <repo>
-core/checks/signoff.py       <repo> <sprint_id>
-core/checks/cost.py          <repo> <timesheet_code>
-core/checks/security.py      <repo>
-core/checks/deploy_history.py <repo>
+core/checks/environment.py         <repo>
+core/checks/ci_gates.py            <repo>
+core/checks/signoff.py             <repo> <sprint_id>
+core/checks/cost.py                <repo> <timesheet_code>
+core/checks/security.py           <repo>
+core/checks/deploy_history.py      <repo>
+core/checks/traceability_issue.py   <repo>
+core/checks/traceability_ticket.py  <repo>
 ```
+
+Sprint ids and windows must come from `core/sprint.py` (the
+`sprint_calendar` in config), never from ad-hoc date reasoning.
 
 Each returns a JSON fragment matching the shared schema
 (`core/schema.py` / `hygiene-schema.yaml`). Collect these into one
@@ -88,22 +95,32 @@ but stay inside these bounds:
 - **`email_parsed` signoff results**: report these as lower-confidence
   than `repo_artifact` results, visibly — don't average them into the
   same score with equal weight without flagging the method.
-- **Enforcement-eligibility recommendation**: apply the Phase 3 threshold
-  (N consecutive sprints of `environment_separation: pass` and
-  `uat_signoff.method: repo_artifact`) and *recommend* promotion — do not
-  auto-promote. A human flips the CI gate. Say this explicitly in the
+- **Enforcement-eligibility recommendation**: apply the promotion threshold
+  (`promotion_threshold_sprints` consecutive qualifying sprints of
+  `environment_separation: pass` and `uat_signoff.method: repo_artifact`,
+  tracked in `reports/promotion_state.json`) and *recommend* promotion — do
+  not auto-promote. A human flips the CI gate. Say this explicitly in the
   output so it isn't mistaken for an automatic action.
+- **Traceability results**: report `unlinked_count`/`total_checked` per tier
+  (feature-to-issue, issue-to-ticket) as-is. `undefined_standard` on
+  issue-to-ticket means no ticketing integration is configured yet — an
+  org-wide open item, not a repo failure.
+- **Weight warnings**: if the aggregate carries `weight_warnings` (e.g.
+  traceability unweighted), surface the decision needed — never resolve it
+  by editing config yourself.
 - **Narrative summary across the aggregate**: this is genuinely a job for
   reasoning, not a script — e.g. "3 of 11 in-scope projects account for
   most of the cost variance this run" or "gap_flag incidents cluster in
-  the two weeks after a release." Say what the data shows; don't infer
-  causes the data doesn't support.
+  the two weeks after a release." Compare current runs against the
+  snapshots in `reports/history/` for trend statements; say what the data
+  shows; don't infer causes the data doesn't support.
 
 ## Step 5 — Compose and emit the report
 
 One aggregate report per run:
 
-- Table of in-scope repos with hygiene_score, gap_flag count, variance_pct.
+- Table of in-scope repos with hygiene_score, gap_flag count, variance_pct,
+  qualifying_streak, and traceability unlinked counts.
 - Explicit call-outs: any `gap_flag: true` (deploy with no signoff), any
   `enforcement_eligible: true` (promotion candidates), any
   `undefined_standard` blocking a dimension org-wide.
@@ -128,5 +145,7 @@ requiring someone to open the file.
 - This skill never treats an email-parsed signoff as equivalent evidence
   to a repo artifact, even when reporting summary statistics.
 - If asked to run against a repo outside the activity window, say so and
-  ask whether to override the window for that one repo rather than
+  ask whether to override the window for that one repo (`--include
+  <repo_id>` for a single run, or an `overrides` entry in
+  config/projects.yaml for a permanent per-repo window) rather than
   silently including it.

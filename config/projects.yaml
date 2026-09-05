@@ -1,20 +1,20 @@
-# Metadata for repos that need it
-# The repo list is discovered live, this file only maps metadata
+# Metadata for repos that need it.
+# The repo list is discovered live from the git provider (A1); this file
+# only maps metadata (budgets, timesheet codes) and per-repo overrides.
 repos:
-  # Example:
   # "navadhiti/web-frontend":
   #   timesheet_code: "WEB-UI-01"
   #   mailbox_pattern: "subject:WEB-UI sprint signoff"
-  #   role_rates:
-  #     developer: 100
-  #     qa: 80
-  "mock-org/active-project-1":
-    timesheet_code: "PRJ-001"
-    mailbox_pattern: "subject:PRJ-001 signoff"
-    budget: 150000.0
-    headcount: 5
-  "mock-org/active-project-2":
-    timesheet_code: "PRJ-002"
-    mailbox_pattern: "subject:PRJ-002 signoff"
-    budget: 80000.0
-    headcount: 3
+  #   budget: 150000.0
+  #   headcount: 5
+  #   sprint_calendar:              # per-project cadence override (B1)
+  #     sprint_length_days: 10
+  #     sprint_start_date: "2026-08-24"
+
+# B4 — per-repo activity-window overrides. Repos listed here use the
+# given activity_window_days instead of the global
+# config/master.yaml activity_window_days. For one-off ad-hoc checks use
+# `python master_agent.py --include <repo_id>` instead of editing config.
+overrides:
+  # "navadhiti/legacy-maintenance":
+  #   activity_window_days: 120
