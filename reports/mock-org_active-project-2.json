@@ -1,7 +1,7 @@
 {
   "id": "mock-org/active-project-2",
   "repo_url": "https://github.com/mock-org/active-project-2",
-  "last_evaluated": "2026-09-05T17:32:19.692436",
+  "last_evaluated": "2026-09-05T17:42:45.290103",
   "dimensions": {
     "environment_separation": {
       "status": "undefined_standard",
@@ -38,8 +38,8 @@
       ]
     },
     "deployment_history": {
-      "last_deploy": "2026-09-04T17:32:19.692426",
-      "last_signoff_before_deploy": "2026-09-04T16:32:19.692426",
+      "last_deploy": "2026-09-04T17:42:45.290093",
+      "last_signoff_before_deploy": "2026-09-04T16:42:45.290093",
       "gap_flag": false
     }
   },
