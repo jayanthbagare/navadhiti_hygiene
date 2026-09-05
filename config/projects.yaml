@@ -1,0 +1,20 @@
+# Metadata for repos that need it
+# The repo list is discovered live, this file only maps metadata
+repos:
+  # Example:
+  # "navadhiti/web-frontend":
+  #   timesheet_code: "WEB-UI-01"
+  #   mailbox_pattern: "subject:WEB-UI sprint signoff"
+  #   role_rates:
+  #     developer: 100
+  #     qa: 80
+  "mock-org/active-project-1":
+    timesheet_code: "PRJ-001"
+    mailbox_pattern: "subject:PRJ-001 signoff"
+    budget: 150000.0
+    headcount: 5
+  "mock-org/active-project-2":
+    timesheet_code: "PRJ-002"
+    mailbox_pattern: "subject:PRJ-002 signoff"
+    budget: 80000.0
+    headcount: 3

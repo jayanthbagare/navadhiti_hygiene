@@ -1,0 +1,12 @@
+environment_separation:
+  # Examples of what counts as separated environments
+  required_artifacts:
+    - "terraform/workspaces"
+    - "k8s/namespaces"
+    - "docker-compose.*.yml"
+
+security_baseline:
+  required_scanners:
+    - "dependabot"
+    - "snyk"
+    - "trivy"

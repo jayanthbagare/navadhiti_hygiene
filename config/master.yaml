@@ -1,0 +1,9 @@
+activity_window_days: 60
+parallelism: 4
+default_sprint_duration_days: 14
+weights:
+  environment_separation: 0.2
+  ci_cd_gates: 0.1
+  uat_signoff: 0.4
+  security_baseline: 0.2
+  cost_tracking: 0.1

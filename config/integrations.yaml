@@ -1,0 +1,14 @@
+git_provider:
+  type: "github" # or "azure_repos", "gitlab"
+  api_url: "https://api.github.com"
+  # token should be set via env var: GIT_TOKEN
+
+timesheet_system:
+  type: "zoho_people" # placeholder
+  api_url: "https://people.zoho.com/api"
+  # token should be set via env var: TIMESHEET_TOKEN
+
+email_scanner:
+  type: "office365" # placeholder
+  mailbox: "releases@navadhiti.com"
+  # auth should be set via env var: EMAIL_CLIENT_SECRET

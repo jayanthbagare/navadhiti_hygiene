@@ -1,0 +1,50 @@
+{
+  "id": "mock-org/active-project-2",
+  "repo_url": "https://github.com/mock-org/active-project-2",
+  "last_evaluated": "2026-09-05T17:32:19.692436",
+  "dimensions": {
+    "environment_separation": {
+      "status": "undefined_standard",
+      "evidence": [
+        "Environment standards check not implemented yet (stubbed)"
+      ]
+    },
+    "ci_cd_gates": {
+      "status": "undefined_standard",
+      "evidence": [
+        "CI/CD gates check not implemented yet (stubbed)"
+      ]
+    },
+    "uat_signoff": {
+      "status": "unverifiable",
+      "method": "none",
+      "evidence": [
+        "UAT signoff check not implemented yet (stubbed)"
+      ],
+      "per_sprint": []
+    },
+    "cost_tracking": {
+      "status": "pass",
+      "headcount": 3,
+      "sprint_duration_days": 14,
+      "estimated_cost": 33600.0,
+      "budget": 80000.0,
+      "variance_pct": -57.99999999999999
+    },
+    "security_baseline": {
+      "status": "undefined_standard",
+      "evidence": [
+        "Security baseline check not implemented yet (stubbed)"
+      ]
+    },
+    "deployment_history": {
+      "last_deploy": "2026-09-04T17:32:19.692426",
+      "last_signoff_before_deploy": "2026-09-04T16:32:19.692426",
+      "gap_flag": false
+    }
+  },
+  "overall": {
+    "hygiene_score": 10.0,
+    "enforcement_eligible": false
+  }
+}
