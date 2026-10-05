@@ -6,13 +6,14 @@
 # Note what this file does and does not prove: it proves dependency scanning is
 # *configured*. Whether Dependabot is switched on is a hosting-side fact with no
 # evidence in the repository, so tools/verify_baseline.py reports "configured"
-# and never "active". Enabling it is a named human action recorded in
-# CONFIDENTIALITY.md.
+# and never "active".
 #
-# Verified on 2026-10-05: this repository already has Dependabot *security*
-# updates enabled. The *version* updates configured below are a separate switch,
-# and GitHub exposes no API to confirm whether it is on — which is the practical
-# reason the verifier cannot.
+# Updated 2026-10-05, after this file reached main: version updates are in fact
+# active. Dependabot opened its first update pull requests about 90 seconds after
+# the merge and has since opened five (requests, pydantic, PyYAML, pytest,
+# pre-commit). So the earlier note saying version updates needed manual enabling
+# was wrong — the file alone was enough. The verifier's behaviour is unchanged on
+# purpose: a criterion still cannot see any of this from inside a checkout.
 #
 # Single update entry because requirements.txt is a single flat file; adding a
 # second ecosystem here would create two sources of truth for the same

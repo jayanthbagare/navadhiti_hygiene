@@ -206,9 +206,39 @@ Two further facts fall out of the same query:
 - The repository is still **public**. FR-026 holds: nothing in this milestone
   touched visibility.
 - Dependabot **security** updates are already enabled. Dependabot **version**
-  updates from `.github/dependabot.yml` are a separate switch, and GitHub exposes
-  no API field for it. That is the concrete reason the verifier reports
-  `configured` rather than `active`, and it is recorded as a human action.
+  updates appeared to be a separate switch with no API field. That is the
+  concrete reason the verifier reports `configured` rather than `active`.
+
+### Correction — version updates are active, and the earlier claim was wrong
+
+The second bullet above was written before PR #37 was merged, and it was wrong in
+its conclusion. Once `.github/dependabot.yml` reached `main` at 08:41:52,
+Dependabot opened its first update pull requests at 08:42:52 — about a minute
+later — and by the end of the day had opened five:
+
+| PR | Dependency |
+| :--- | :--- |
+| [#42](https://github.com/jayanthbagare/navadhiti_hygiene/pull/42) | `requests>=2.34.2` |
+| [#41](https://github.com/jayanthbagare/navadhiti_hygiene/pull/41) | `pydantic>=2.13.5` |
+| [#40](https://github.com/jayanthbagare/navadhiti_hygiene/pull/40) | `pre-commit>=4.6.2` |
+| [#39](https://github.com/jayanthbagare/navadhiti_hygiene/pull/39) | `PyYAML>=6.0.3` |
+| [#38](https://github.com/jayanthbagare/navadhiti_hygiene/pull/38) | `pytest>=9.1.1` |
+
+The configuration file alone was sufficient. No manual enabling step was needed,
+so the "enable version updates manually" item that stood in the README,
+`CONFIDENTIALITY.md` and this record was an unnecessary human action, and has been
+removed in all three.
+
+**The verifier's behaviour is deliberately unchanged.** It still reports
+`configured` and never `active`. A criterion that reads one file from inside a
+checkout cannot see whether Dependabot is switched on, and that will remain true
+in every future clone — so the honest output does not change. What changed is a
+dated, human-observed fact, recorded in `CONFIDENTIALITY.md` where a person
+maintains it, not baked into a check that cannot support the claim.
+
+This is the failure Principle 3 warns about, in the direction nobody expects:
+being *too* cautious can be as wrong as being too confident, if the caution gets
+written down as a required human step that nobody needs to perform.
 
 ### Two defects this run found that a local run could not
 
@@ -265,20 +295,28 @@ Not fixed here, because fixing either would mean inventing a standard or a scope
 that this milestone does not hold. Recorded so they are decisions rather than
 accidents.
 
-1. **`quickstart.md` Scenario 5 conflicts with the CLI contract.** The scenario's
-   procedure cannot produce exit `2` while the contract requires cwd-independence.
-   Amendment needed; the contract is correct as written.
+1. **`quickstart.md` Scenario 5 conflicted with the CLI contract.** The scenario's
+   procedure could not produce exit `2` while the contract requires
+   cwd-independence. **Now amended** — it copies the script outside a repository
+   and separately checks that cwd does not change the verdict, both verified. The
+   contract was correct as written and was not changed. `research.md` D4 and
+   `tasks.md` T021, which both offered the non-working `nextline` bypass, are
+   annotated with the correction; `README.md` carries the operative version.
 
 2. **The `nextline` allowlist pragma does not work through the pre-commit hook**
-   (§6). Documented in the README as a non-working form. If `detect-secrets` fixes
-   it, the README note should be removed.
+   (§6). `research.md` D4 and `tasks.md` T021 are annotated with the correction,
+   and `quickstart.md` Scenario 6 now offers only the two bypasses that work.
+   `README.md` states plainly that the documented `nextline` form fails. If
+   `detect-secrets` fixes it, those annotations should be removed.
 
 3. **`no-real-data` part 2 is scoped to the `repos:` block of
    `config/projects.yaml`,** exactly as `contracts/verify-baseline-cli.md`
    specifies. A `budget:` uncommented under the `overrides:` block would therefore
    pass. Widening the check to every mapping in the file would close the gap with
-   no false positives, but it is a change to a signed contract and needs the
-   contract's owner, not an implementer.
+   no false positives — `overrides:` legitimately holds `activity_window_days`,
+   which is not a live-metadata key — but it is a change to a signed contract and
+   belongs to the contract's owner, not to an implementer. **This is the one
+   carried-forward finding with a ready fix and no authority to apply it.**
 
 4. **The constitution is still unratified.** `.specify/memory/constitution.md` is
    the unmodified template, so the plan's constitution gate ran provisionally

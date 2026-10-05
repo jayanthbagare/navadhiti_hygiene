@@ -314,7 +314,7 @@ command confirms, not a claim.
 | **Ignore Rules** | ✅ Live | `.gitignore` covers environment directories, Python bytecode, credential files, editor/tooling caches, Spec Kit local state, and generated run output |
 | **Test Runner Declared** | ✅ Live | `pytest` + `pytest.ini`; the whole suite runs with one command, no test rewrites, offline, and date-independent |
 | **Internal-Use Notice** | ✅ Live | [`NOTICE`](NOTICE) states authorship and restricted use without inventing license terms |
-| **Dependency Update Scanning** | ✅ Configured | `.github/dependabot.yml` covers the `pip` ecosystem weekly. **Activation is a hosting-side fact with no evidence in the repository** — the verifier reports `configured`, never `active` |
+| **Dependency Update Scanning** | ✅ Active | `.github/dependabot.yml` covers the `pip` ecosystem weekly, and Dependabot is opening update PRs. **The verifier still reports `configured`, never `active`** — activation is a hosting-side fact with no evidence in the repository, so the criterion does not claim it. See [`CONFIDENTIALITY.md`](CONFIDENTIALITY.md) for the dated observation that it is on |
 | **Commit-Time Secret Guard** | ✅ Live | `detect-secrets` via `pre-commit`, scoped to `config/*.yaml`, with suppressions reviewed in `.secrets.baseline` and a documented inline bypass |
 | **Baseline Verification** | ✅ Live | `tools/verify_baseline.py` — seven criteria, one verdict, exit 0/1/2, read-only, stdlib-only, advisory only |
 | **Automated Baseline Run** | ✅ Live, non-blocking | `.github/workflows/baseline.yml` runs on `pull_request` only and **must not be configured as a required status check** |
@@ -337,14 +337,17 @@ the expected result of this decision, not an incomplete task.
 
 Not automated, and not quietly assumed:
 
-- **Enable Dependabot version updates** if the configuration file alone does not
-  activate them. Checked on 2026-10-05: the `main` branch carries no protection
-  and the repository has no rulesets, so there are no required status checks at
-  all and the advisory `baseline` job cannot be gating. Dependabot *security*
-  updates are already enabled at the repository level; **version** updates from
-  `.github/dependabot.yml` are a separate switch with no API surface to confirm
-  it — which is precisely why the verifier reports `configured` rather than
-  `active`.
+- **Review the Dependabot update pull requests.** Version updates turned out to be
+  **active** rather than configured-only: about 90 seconds after the config reached
+  `main` on 2026-10-05, Dependabot opened its first update PRs, and it has since
+  opened five (`requests`, `pydantic`, `PyYAML`, `pytest`, `pre-commit`). They are
+  ordinary dependency bumps and each carries a passing `baseline` check, but a
+  human decides what merges. The verifier will still only ever say `configured`,
+  because a criterion cannot see this.
+- **Confirm `main` stays unprotected** whenever someone adds branch protection. It
+  has no protection and no rulesets today, which is what keeps the advisory
+  `baseline` job non-gating. Adding a required status check on this job would
+  silently switch enforcement on, which FR-033 forbids.
 - **Name the accountable owner** in `CONFIDENTIALITY.md`. The role is recorded;
   the individual is an open item.
 - **Ratify the constitution.** `.specify/memory/constitution.md` is still the

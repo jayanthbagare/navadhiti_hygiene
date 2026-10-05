@@ -55,9 +55,18 @@ The usual objection — that a production install should not pull test tooling �
 | Requirement | How `detect-secrets` satisfies it |
 | :--- | :--- |
 | FR-017 — commit-time, config files | pre-commit hook, `files:` scoped to `config/*.yaml` |
-| FR-019 — documented bypass | inline `# pragma: allowlist secret` / `# pragma: allowlist nextline secret` |
+| FR-019 — documented bypass | inline `# pragma: allowlist secret`, or recording the finding in `.secrets.baseline` |
 | FR-020 — extensible by configuration | plugins and filters are declared in `.secrets.baseline`, not in code |
 | FR-018 — identifies file and pattern | default hook output names file, line and detector |
+
+> **Correction from the validation run of 2026-10-05.** This decision originally
+> listed the inline pragma *and* `# pragma: allowlist nextline secret` as the
+> FR-019 bypass. The `nextline` form does not work through the pre-commit hook:
+> `detect-secrets` v1.5.0's regex matches it and `is_line_allowlisted()` returns
+> `True` when called with that line as `previous_line`, but `detect-secrets-hook`
+> still blocks the commit. Verified across five placements. FR-019 is met by the
+> two bypasses listed above; the `nextline` form must not be offered to a
+> contributor.
 
 Two further reasons: it is pure Python, so CI needs no binary download (relevant because the verifier must also run in CI and the tool has no deployment profile to keep slim); and `.secrets.baseline` is a reviewable diff, so a PR that adds a suppression shows the reviewer exactly what was suppressed and why.
 

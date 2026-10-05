@@ -90,15 +90,22 @@ The real mailbox address and the real external tenant domain are **not** accepte
 exposures. Both were replaced with obvious placeholders on 2026-10-05; see
 `config/integrations.yaml`.
 
-### Not an Exposure, but a Human Action
+### Activation, Observed Rather Than Assumed
 
-Dependency scanning is *configured* in `.github/dependabot.yml`. Whether
-Dependabot's version updates are switched on is a hosting-side fact with no
-evidence in the repository, so the verifier reports `configured` and never
-`active`. As of 2026-10-05 this repository has Dependabot **security** updates
-enabled; enabling **version** updates remains a manual human action, listed here
-so that a configured-but-dormant scanner is a recorded decision rather than a
-silent gap.
+Dependency scanning is *configured* in `.github/dependabot.yml`, and the verifier
+reports `configured` and never `active` — activation is a hosting-side fact with
+no evidence in the repository, and a criterion must not claim what it cannot see.
+
+A human observer can supply that evidence, and did. About 90 seconds after this
+configuration reached `main` on 2026-10-05, Dependabot opened its first update
+pull requests against `main`, and by the end of the day had opened five:
+`requests`, `pydantic`, `PyYAML`, `pytest` and `pre-commit`. Version updates are
+therefore **demonstrably active**, not merely configured.
+
+The distinction is worth keeping. The verifier's line stays `configured` forever,
+because a future clone that reads the file cannot see whether any of this remains
+true. The evidence above is a dated observation in a document a human maintains,
+which is the right place for a fact like that.
 
 ## Revisit Triggers
 
