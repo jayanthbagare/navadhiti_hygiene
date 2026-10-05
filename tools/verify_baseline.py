@@ -673,25 +673,27 @@ def check_confidentiality_record(repo: Repository) -> CriterionResult:
 
 
 def _live_project_entries(repo: Repository) -> list[str]:
-    """Uncommented entries under `repos:` carrying live project metadata."""
+    """Any uncommented live-metadata key anywhere in `config/projects.yaml`.
+
+    Scoped to the file, not to one block within it. An earlier version followed
+    the contract's wording literally and scanned only the `repos:` block, which
+    left a hole: a live `budget:` under `overrides:` passed, even though FR-023
+    forbids real project names with budgets without qualification. Narrower than
+    the requirement it implements is not a safe default for a security control.
+
+    Widening costs nothing in false positives. `overrides:` legitimately holds
+    `activity_window_days`, which is not one of `LIVE_PROJECT_KEYS`, and the rule
+    still asks whether a key is *commented* rather than which file it sits in, so
+    FR-030 compliance is unchanged.
+    """
     if not repo.exists(PROJECTS_CONFIG):
         return []
     offenders: list[str] = []
-    in_repos = False
-    repos_indent = 0
     for number, raw in enumerate(repo.read_text(PROJECTS_CONFIG).splitlines(), 1):
         stripped = raw.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        indent = len(raw) - len(raw.lstrip())
         key = _scalar(stripped).split(":", 1)[0].strip()
-        if key == "repos":
-            in_repos = True
-            repos_indent = indent
-            continue
-        if not in_repos or indent <= repos_indent:
-            in_repos = False
-            continue
         if key in LIVE_PROJECT_KEYS:
             offenders.append(f"{PROJECTS_CONFIG}:{number}  {key}")
     return offenders
