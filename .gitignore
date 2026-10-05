@@ -1,0 +1,72 @@
+# Navadhiti Hygiene System — repository ignore rules
+# FR-002. One section per class of artefact, with the reason it is ignored.
+# A path that is ignored is NOT necessarily untracked; see README
+# "If you have an existing clone" for the one-command path to a clean state.
+
+# --- 1. Virtual environments -------------------------------------------
+# A developer's environment is theirs, not source. Tracking it versions
+# third-party libraries and every developer's local differences.
+venv/
+.venv/
+env/
+ENV/
+virtualenv/
+.tox/
+
+# --- 2. Python bytecode and compiled artifacts --------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- 3. Local environment and credential files --------------------------
+# Tokens belong in the operator's environment, never in a tracked file.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!*.pubkey
+
+# --- 4. Editor and tooling caches ---------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+node_modules/
+
+# Local agent harness. Its Speckit command definitions duplicate
+# .specify/workflows/speckit/workflow.yml, which is the tracked source of
+# truth; committing both would give one workflow two homes.
+.opencode/
+
+# --- 5. Spec Kit local state --------------------------------------------
+# Per-checkout pointer, rewritten on every feature switch. The rest of
+# .specify/ (scripts, templates, constitution) is tracked on purpose.
+.specify/feature.json
+
+# --- 6. Generated run output --------------------------------------------
+# The scanner writes reports/ at runtime. It accumulates project names and
+# cost figures, so it is excluded from tracking — but the tool still writes
+# there normally (FR-025). See CONFIDENTIALITY.md.
+reports/
