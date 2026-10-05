@@ -12,6 +12,6 @@ requests>=2.0.0
 #   pytest          — the declared test runner; `pytest` runs the whole suite
 #   pre-commit      — runs the commit-time secret guard (FR-017)
 #   detect-secrets  — the secret detector that guard invokes
-pytest>=7.0
+pytest>=9.1.1
 pre-commit>=3.0
 detect-secrets>=1.5.0
