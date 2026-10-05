@@ -11,7 +11,7 @@ The **Navadhiti Project Hygiene System** evaluates software engineering reposito
 - **Master-Subagent Architecture**: A centralized `MasterAgent` handles organization-wide repo discovery and filtering, dispatching isolated sub-agents per project.
 - **Dual Operating Modes**:
   - **Observer (Read-Only)**: Audits active projects, calculates a 0–100 weighted Hygiene Score, detects unapproved deployment gaps, and monitors budget variance.
-  - **Enforcer (CI Gate)**: Runs on pull requests to prevent merges that violate baseline hygiene requirements.
+  - **Enforcer (CI Gate)**: Built and tested — blocks merges that violate baseline hygiene requirements. **Not yet wired into this repository's CI**; enforcement is switched on by an explicit human decision, not by automation.
 - **Pydantic v2 Typed Schemas**: Complete typing and validation across all dimensions and serialized reports.
 - **AI Agent Skill Ready**: Includes a native Hermes orchestration skill (`hermes/skill.md`) for automated analysis and executive reporting.
 - **Detailed Technical Guide**: Complete implementation blueprint available in [`USAGE_AND_TECHNICAL_GUIDE.md`](USAGE_AND_TECHNICAL_GUIDE.md).
@@ -78,15 +78,35 @@ Clone the repository and set up a virtual environment:
 ```bash
 git clone https://github.com/jayanthbagare/navadhiti_hygiene.git
 cd navadhiti_hygiene
-cd hygiene
 
 # Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (runtime and test tooling)
 pip install -r requirements.txt
 ```
+
+Every command above runs in the order given, on a fresh clone, with no
+undocumented step. The environment directory is created locally and is never
+tracked — you will never see another contributor's copy of it.
+
+#### If you have an existing clone
+
+Clones made before the ignore rules existed still have a virtual environment
+under version control, and an ignore rule alone does not untrack anything.
+Reach a clean state in one command, without losing your working environment:
+
+```bash
+git rm -r --cached venv core/__pycache__ core/checks/__pycache__ \
+                  sub_agents/__pycache__ tests/__pycache__
+git status --porcelain
+```
+
+This removes those paths from the index only. Your `venv/` directory stays on
+disk and keeps working — `source venv/bin/activate` still works immediately
+afterwards. Then `git pull` and continue; the tracked file count drops from
+2,033 to under 100 with no other action.
 
 ### 3. Run the Evaluation
 Set a GitHub token (PAT with repo read access; administration read gives full CI-gate fidelity) and execute the master agent:
@@ -143,6 +163,110 @@ The evaluation produces individual JSON records and an aggregate summary in the 
 
 ---
 
+## Verifying This Repository
+
+The system audits other repositories for hygiene. It also holds itself to the
+same standard, and one command checks every part of that:
+
+```bash
+python tools/verify_baseline.py
+```
+
+It prints one line per criterion, a verdict, and the count behind it, then exits
+`0` if every criterion passed, `1` if any failed, or `2` if the verifier itself
+could not run. That last code matters: it means "I could not look", so a broken
+verifier is never mistaken for a healthy repository.
+
+Seven criteria are checked: no environment files tracked, the test suite green,
+a licensing artefact present, dependency scanning configured, a commit-time
+secret guard configured, the confidentiality record present and linked, and no
+real Navadhiti data committed.
+
+```text
+navadhiti hygiene — repository baseline
+commit: 1e2d98eba80c81501a5ffe193af455155b2e2bb4
+
+  pass         no-env-tracked          no environment files are tracked (0 found, was 1989)
+  pass         test-suite              107 tests passed via pytest
+  pass         licensing-artifact      NOTICE present, internal-use notice
+  pass         dependency-scanning     .github/dependabot.yml configured for pip (activation not verifiable from the repository)
+  pass         secret-guard            .pre-commit-config.yaml configures detect-secrets over config/*.yaml with a reviewed baseline (.secrets.baseline)
+  pass         confidentiality-record  CONFIDENTIALITY.md present and linked from README.md
+  pass         no-real-data            no denied identifiers, live run output, or live project metadata in 68 tracked files
+
+verdict: PASS (7 of 7 criteria passed)
+this run reports only; it does not prevent merges
+```
+
+**This run reports; it does not block.** It runs automatically on every pull
+request and is deliberately *not* a required status check. A green result never
+means a merge was prevented, and a red one never prevents one.
+
+Findings name a path, a line number, a count, or a pattern — never the value
+found. A report can be pasted into a ticket without re-exporting the secret it
+found.
+
+### Running the Tests
+
+```bash
+pytest
+```
+
+That is the whole command, and it exits non-zero if any test fails. It runs
+offline: all GitHub and ticketing traffic is mocked at the HTTP layer. The suite
+does not depend on the calendar's position relative to today, so it passes on
+any run date.
+
+### The Commit-Time Secret Guard
+
+A credential-shaped string must never reach a configuration file. The guard is
+`detect-secrets`, run through `pre-commit`, scoped to `config/*.yaml`:
+
+```bash
+pre-commit install          # once per clone
+```
+
+Committing a token into a configuration file is blocked, and the message names
+the file, the line, and the pattern that matched.
+
+**When the match is a false positive.** A documented placeholder token is a false
+positive, and it is not a reason to disable the guard. Two bypasses work, and
+both keep the guard running for everything else.
+
+*Suppress the one line* with an inline pragma on the same line as the value:
+
+```yaml
+# Example placeholder for docs, not a credential: ghp_example0000000000000000000000000000  # pragma: allowlist secret
+```
+
+*Or record it as an accepted finding*, which is the better choice when the line
+is genuinely part of the configuration:
+
+```bash
+detect-secrets scan > .secrets.baseline    # review the diff, then: git add .secrets.baseline
+```
+
+Both leave a trace: the pragma is in the committed line, and a recorded finding
+appears in the `.secrets.baseline` diff for a reviewer to approve.
+
+> **The `nextline` form does not work.** `detect-secrets` documents
+> `# pragma: allowlist nextline secret` and its own regex matches that string,
+> but the pre-commit hook path still blocks the commit. Verified against
+> `v1.5.0` on 2026-10-05. Put the pragma on the same line as the value.
+
+Every suppression is recorded in [`.secrets.baseline`](.secrets.baseline), and
+adding a detector or a pattern is a change to that file rather than to source.
+
+### Confidentiality
+
+This repository is public, and that is a recorded decision with a written policy
+behind it, not an accident of how it was created. Read
+[`CONFIDENTIALITY.md`](CONFIDENTIALITY.md) for the decision, the categories of
+data that must never be committed here, the exposures that were accepted on
+purpose, and the conditions that force revisiting the choice.
+
+---
+
 ## Configuration Files
 
 The behavior of the hygiene system is entirely data-driven via four YAML files in `config/`:
@@ -173,11 +297,58 @@ The behavior of the hygiene system is entirely data-driven via four YAML files i
 | **Report History Archive** | ✅ Live | `reports/history/<timestamp>-aggregate.json` written before every aggregate overwrite |
 | **Weight Validation** | ✅ Live | Startup fails loudly unless configured weights sum to exactly 1.0 |
 | **Aggregate Reporting** | ✅ Live | Multi-key sorting (Gap flag $\rightarrow$ Variance % $\rightarrow$ Score), weight warnings, excluded-repo reasons |
-| **Enforcer CI Subagent** | ✅ Live | PR blocking gate (exit 0/1); traceability blocks new projects only, `undefined_standard` never blocks |
+| **Enforcer CI Subagent** | 🟡 Built, not wired | `sub_agents/enforcer_agent.py` implements the gate (exit 0/1) and is covered by tests, but **no workflow runs it on a pull request today**. Enforcement is a separate decision, not a side effect of this repository's CI. |
 | **Cost & Variance Check** | 🟡 Metadata-based | Headcount $\times$ duration $\times$ rate vs. budget from `config/projects.yaml`; live Zoho People API is the next milestone |
 | **UAT Signoff (email tier)** | 🟡 Declared, not built | `email_parsed` fallback is schema-declared but unimplemented; missing artifacts are reported honestly as `method: none` |
 | **Ticketing Verification** | 🟡 Config-gated | Runs once `ticketing_system` is configured in `config/integrations.yaml`; until then reports `undefined_standard` |
 | **GitLab / Azure Repos Providers** | 🟡 Roadmap | `GitProvider` interface is ready; new providers add classes to `core/git_providers.py` without touching the master agent |
+
+### Repository's Own Hygiene
+
+Every row below is checked by `python tools/verify_baseline.py`, which exits
+non-zero if any of them stops being true. A row marked ✅ here is a row the
+command confirms, not a claim.
+
+| Control | Status | Details |
+| :--- | :---: | :--- |
+| **Ignore Rules** | ✅ Live | `.gitignore` covers environment directories, Python bytecode, credential files, editor/tooling caches, Spec Kit local state, and generated run output |
+| **Test Runner Declared** | ✅ Live | `pytest` + `pytest.ini`; the whole suite runs with one command, no test rewrites, offline, and date-independent |
+| **Internal-Use Notice** | ✅ Live | [`NOTICE`](NOTICE) states authorship and restricted use without inventing license terms |
+| **Dependency Update Scanning** | ✅ Configured | `.github/dependabot.yml` covers the `pip` ecosystem weekly. **Activation is a hosting-side fact with no evidence in the repository** — the verifier reports `configured`, never `active` |
+| **Commit-Time Secret Guard** | ✅ Live | `detect-secrets` via `pre-commit`, scoped to `config/*.yaml`, with suppressions reviewed in `.secrets.baseline` and a documented inline bypass |
+| **Baseline Verification** | ✅ Live | `tools/verify_baseline.py` — seven criteria, one verdict, exit 0/1/2, read-only, stdlib-only, advisory only |
+| **Automated Baseline Run** | ✅ Live, non-blocking | `.github/workflows/baseline.yml` runs on `pull_request` only and **must not be configured as a required status check** |
+| **Confidentiality Record** | ✅ Live | [`CONFIDENTIALITY.md`](CONFIDENTIALITY.md) — decision, date, accountable role, rationale, concrete exclusions, accepted exposures, revisit triggers |
+| **No Real Data Enforced** | ✅ Live | `no-real-data` criterion: denied-identifier denylist plus structural rules, by content rather than by directory |
+| **Environment Untracked** | ✅ Live, with history residue | **The committed virtual environment remains in the three existing commits, by decision.** A fresh clone tracks 68 files instead of 2,033, but `git log --stat` still shows 1,989 environment files, and that was a choice — see the next section |
+
+#### Why the environment is still in history
+
+History was not rewritten. A contributor's clone, and any pull request opened
+against those three commits, would break if it were. With three commits the cost
+was small; it would not stay small indefinitely, and that is what a later
+decision needs to weigh.
+
+So: the files are untracked going forward and covered by `.gitignore`, and they
+are still there if you look. `git log --stat` showing 1,989 environment files is
+the expected result of this decision, not an incomplete task.
+
+### Outstanding Human Actions
+
+Not automated, and not quietly assumed:
+
+- **Enable Dependabot version updates** if the configuration file alone does not
+  activate them. Checked on 2026-10-05: the `main` branch carries no protection
+  and the repository has no rulesets, so there are no required status checks at
+  all and the advisory `baseline` job cannot be gating. Dependabot *security*
+  updates are already enabled at the repository level; **version** updates from
+  `.github/dependabot.yml` are a separate switch with no API surface to confirm
+  it — which is precisely why the verifier reports `configured` rather than
+  `active`.
+- **Name the accountable owner** in `CONFIDENTIALITY.md`. The role is recorded;
+  the individual is an open item.
+- **Ratify the constitution.** `.specify/memory/constitution.md` is still the
+  unratified template, so the plan's constitution gate ran provisionally.
 
 For details and the remaining productionization phases, consult [`USAGE_AND_TECHNICAL_GUIDE.md`](USAGE_AND_TECHNICAL_GUIDE.md).
 

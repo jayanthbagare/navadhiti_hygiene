@@ -36,6 +36,15 @@
    - [Phase 4: Office365 / Graph API Email Sign-off Scanning](#phase-4-office365--graph-api-email-sign-off-scanning)
    - [Phase 6: GitLab / Azure Repos Providers](#phase-6-gitlab--azure-repos-providers)
 10. [Operations, Monitoring & Runbook](#10-operations-monitoring--runbook)
+    - [10.1 Setting Up a Clone](#101-setting-up-a-clone)
+    - [10.2 Running the Evaluation](#102-running-the-evaluation)
+    - [10.3 Running on a Schedule (Cron)](#103-running-on-a-schedule-cron)
+    - [10.4 Running the Test Suite](#104-running-the-test-suite)
+    - [10.5 Verifying This Repository's Own Baseline](#105-verifying-this-repositorys-own-baseline)
+    - [10.6 Running the Enforcer CI Gate](#106-running-the-enforcer-ci-gate)
+    - [10.7 Adding a New Project](#107-adding-a-new-project)
+    - [10.8 Modifying Hygiene Dimensions & Weights](#108-modifying-hygiene-dimensions--weights)
+    - [10.9 Reading Promotion State](#109-reading-promotion-state)
 11. [Troubleshooting & FAQ](#11-troubleshooting--faq)
 
 ---
@@ -127,11 +136,23 @@ The Hermes skill (`hermes/skill.md`) serves as the orchestration and executive j
 ## 3. Repository Structure & Codebase Map
 
 ```
-hygiene/
+navadhiti_hygiene/
 ├── README.md                      # Quickstart and project summary
 ├── USAGE_AND_TECHNICAL_GUIDE.md   # Complete technical and operational guide (this file)
+├── CONFIDENTIALITY.md             # Recorded data-handling decision and policy
+├── NOTICE                         # Internal-use notice (no license terms)
 ├── master_agent.py                # Master orchestrator: discovery, dispatch, aggregation
-├── requirements.txt               # Python package dependencies
+├── requirements.txt               # Python dependencies: runtime + test tooling
+├── pytest.ini                     # Declared test runner configuration
+├── .gitignore                     # Environment, bytecode, credentials, caches, reports/
+├── tools/
+│   └── verify_baseline.py         # Repository's own baseline verifier (stdlib only)
+├── .github/
+│   ├── dependabot.yml             # Weekly pip dependency update scanning
+│   └── workflows/
+│       └── baseline.yml           # Advisory pull-request baseline run (non-blocking)
+├── .pre-commit-config.yaml        # Commit-time detect-secrets hook, scoped to config/*.yaml
+├── .secrets.baseline              # Reviewed suppressions + detector plugins
 ├── config/
 │   ├── master.yaml                # Window, weights, sprint calendar, promotion thresholds
 │   ├── projects.yaml              # Per-repo metadata + activity-window overrides
@@ -160,10 +181,11 @@ hygiene/
 │   ├── observer_agent.py          # Read-only evaluation sub-agent
 │   └── enforcer_agent.py          # Active CI gating sub-agent (C4)
 ├── tests/
-│   └── test_hygiene.py            # Offline smoke tests (mocked GitHub API)
+│   ├── test_hygiene.py            # Offline smoke tests (mocked GitHub API)
+│   └── test_verify_baseline.py    # Baseline verifier tests (fixture git repositories)
 ├── hermes/
 │   └── skill.md                   # Hermes agent skill definition & operational boundaries
-└── reports/                       # Generated audit reports
+└── reports/                       # Generated audit reports — gitignored, written at runtime
     ├── aggregate.json             # Cross-project aggregated dashboard summary
     ├── history/                   # B5: one archived aggregate per run
     ├── promotion_state.json       # B2: the only persisted cross-run state
@@ -648,7 +670,10 @@ traceability:                     # C2/C3
 ```
 
 ### `config/integrations.yaml`
-Endpoint configurations for enterprise tools:
+Endpoint configurations for enterprise tools. Any address below that names a
+real organisation, mailbox or tenant is a **placeholder**; the operator supplies
+the real value in their own environment and never commits it
+(see [`CONFIDENTIALITY.md`](CONFIDENTIALITY.md)).
 ```yaml
 git_provider:
   type: "github"                  # "github"; gitlab/azure_repos are roadmap providers
@@ -658,7 +683,7 @@ git_provider:
 
 # ticketing_system:               # C3: uncomment when the tool is decided; while
 #   type: "jira"                  # absent, issue-to-ticket reports undefined_standard
-#   api_url: "https://navadhiti.atlassian.net/rest/api/3"
+#   api_url: "https://example-tenant.atlassian.net/rest/api/3"
 #   token_env: "TICKETING_TOKEN"
 
 timesheet_system:
@@ -668,7 +693,10 @@ timesheet_system:
 
 email_scanner:
   type: "office365"
-  mailbox: "releases@navadhiti.com"
+  # `.invalid` is reserved by RFC 2606 and can never resolve. Until an operator
+  # supplies a real mailbox in their own configuration, the email sign-off tier
+  # reports `method: none` honestly rather than pretending it read a mailbox.
+  mailbox: "signoffs@example.invalid"
   # Authentication via environment variable: EMAIL_CLIENT_SECRET
 ```
 
@@ -749,6 +777,28 @@ Milestones 1 and 2 are complete. What was mock or stubbed in Milestone 1 and is 
 | Traceability | did not exist | live 7th dimension (C1–C3) |
 | Enforcer agent | stub | implemented CI gate with new-project traceability (C4) |
 
+Milestone 0 brought the tool's own repository to the baseline it enforces on
+others. It changed **no check logic** — nothing about what the system measures,
+scores, or blocks. An audit finding and a simultaneous change to the auditing
+tool must never be confusable, which is why they are separate milestones.
+
+| Control | Where | Verified by |
+| :--- | :--- | :--- |
+| Ignore rules | `.gitignore` | `no-env-tracked` |
+| Test runner declared | `requirements.txt`, `pytest.ini` | `test-suite` |
+| Internal-use notice | `NOTICE` | `licensing-artifact` |
+| Dependency update scanning | `.github/dependabot.yml` | `dependency-scanning` |
+| Commit-time secret guard | `.pre-commit-config.yaml`, `.secrets.baseline` | `secret-guard` |
+| Baseline verification | `tools/verify_baseline.py` | itself, exit `0` |
+| Advisory CI run | `.github/workflows/baseline.yml` | not a required status check |
+| Confidentiality decision | `CONFIDENTIALITY.md` | `confidentiality-record` |
+| No real data committed | verifier denylist + structural rules | `no-real-data` |
+
+Known residue, stated rather than hidden: the committed virtual environment
+remains in the three existing commits, **by decision**, because rewriting
+history would break existing clones and any open pull request. Forward tracking
+is corrected; the past is left alone.
+
 Still remaining:
 
 ### Phase 3: Real Timesheet & Zoho People Integration
@@ -795,7 +845,31 @@ The `email_parsed` UAT signoff tier is declared in the schema but not implemente
 
 ## 10. Operations, Monitoring & Runbook
 
-### Running the Evaluation
+### 10.1 Setting Up a Clone
+
+These commands run in the order given, on a fresh clone, with no undocumented
+step. `requirements.txt` declares the runtime dependencies **and** the test
+tooling, so there is no separate install step.
+
+```bash
+git clone https://github.com/jayanthbagare/navadhiti_hygiene.git
+cd navadhiti_hygiene
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+The environment directory is created locally and is never tracked — a fresh
+clone tracks 68 files, not the 2,033 this repository once carried. A clone made
+before the ignore rules existed needs the one-command recovery in the README
+("If you have an existing clone"); it removes the environment from the index
+only, leaving the working copy intact.
+
+Note: the committed environment remains in the three existing commits, by
+decision. History was not rewritten so that no contributor's clone or open pull
+request breaks.
+
+### 10.2 Running the Evaluation
 
 ```bash
 export GIT_TOKEN="ghp_..."   # PAT with repo read access (admin read for full CI-gate fidelity)
@@ -803,18 +877,39 @@ python master_agent.py                       # full org run
 python master_agent.py --include org/repo    # force one repo in regardless of window
 ```
 
-### Running on a Schedule (Cron)
+### 10.3 Running on a Schedule (Cron)
 ```bash
 0 0 * * * cd /opt/hygiene && GIT_TOKEN=$GIT_TOKEN /opt/hygiene/venv/bin/python master_agent.py >> /var/log/hygiene.log 2>&1
 ```
 
-### Running the Test Suite
+### 10.4 Running the Test Suite
 ```bash
-venv/bin/python -m unittest discover tests -v
+pytest
 ```
-The suite is fully offline: all GitHub and ticketing HTTP traffic is mocked at the `requests.Session` layer.
+One command, non-zero exit on any failure. The suite is fully offline: all
+GitHub and ticketing HTTP traffic is mocked at the `requests.Session` layer. It
+is also date-independent — the end-to-end fixtures freeze the clock they assert
+against, so the suite passes on any run date rather than only inside one sprint.
 
-### Running the Enforcer CI Gate
+`pytest` is declared in `requirements.txt`, so `pip install -r requirements.txt`
+is all a new clone needs. See §10.1 for the setup commands.
+
+### 10.5 Verifying This Repository's Own Baseline
+```bash
+python tools/verify_baseline.py
+```
+Seven criteria, one verdict, exit `0` healthy / `1` baseline not met / `2` the
+verifier itself could not run. Stdlib-only, read-only, offline, and identical
+locally and in CI — the same command and the same criterion list produce the
+same verdict for the same commit, so the two paths cannot disagree.
+
+The `2` matters: it separates "the repository is wrong" from "I could not look",
+so a broken verifier is never read as a healthy repository. Findings name a
+path, line number, count, or pattern — never the value found. The run is
+advisory: it reports rather than blocks, and `.github/workflows/baseline.yml`
+runs it on pull requests only, without being a required status check.
+
+### 10.6 Running the Enforcer CI Gate
 ```bash
 python -m sub_agents.enforcer_agent "navadhiti/service-a" "https://github.com/navadhiti/service-a"
 # exit 0 = merge allowed, exit 1 = blocked
@@ -846,7 +941,7 @@ jobs:
           python -m sub_agents.enforcer_agent "${{ github.repository }}" "${{ github.server_url }}/${{ github.repository }}"
 ```
 
-### Adding a New Project
+### 10.7 Adding a New Project
 1. Repos are discovered live — nothing to register. Only add metadata where the repo needs it (`config/projects.yaml`):
    ```yaml
    repos:
@@ -858,12 +953,12 @@ jobs:
    ```
 2. Run `python master_agent.py` to trigger immediate evaluation.
 
-### Modifying Hygiene Dimensions & Weights
+### 10.8 Modifying Hygiene Dimensions & Weights
 Edit `config/master.yaml` under `weights`:
 - Weights must sum to exactly `1.0` — startup fails loudly otherwise.
 - To weight traceability (recommended start): `traceability: 0.10` and rebalance (e.g. `ci_cd_gates: 0.05`, `cost_tracking: 0.05`, or take proportionally from the two lowest-weighted dimensions). This is a human decision; the system surfaces the need but never makes it.
 
-### Reading Promotion State
+### 10.9 Reading Promotion State
 `reports/promotion_state.json` shows each repo's `qualifying_streak`, `last_sprint_id`, `last_qualifying_sprint`, and `enforcement_eligible`. Streaks advance once per sprint (idempotent within a sprint). To confirm the counting logic run over run, diff this file between runs — the streak should step up only after a sprint boundary.
 
 ---
