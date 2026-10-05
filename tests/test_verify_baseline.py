@@ -144,25 +144,50 @@ class FixtureRepo:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
 
-        env = dict(os.environ)
-        env.update({
+        self.git("init", "-q", "-b", "main")
+        self.git_stage_all()
+        if self.commit:
+            self.git_commit("fixture")
+
+    @property
+    def git_env(self):
+        """An environment that can commit without a configured git identity.
+
+        Not optional. A developer machine usually has user.name and user.email
+        in its global config, so a bare `git commit` works there by accident; a
+        CI runner has neither, and fails with "Please tell me who you are".
+        Every git call in these tests therefore goes through here, so the suite
+        behaves the same on both.
+        """
+        return {
+            **os.environ,
             "GIT_AUTHOR_NAME": "fixture",
             "GIT_AUTHOR_EMAIL": "fixture@example.com",
             "GIT_COMMITTER_NAME": "fixture",
             "GIT_COMMITTER_EMAIL": "fixture@example.com",
-        })
-        self._git("init", "-q", "-b", "main", env=env)
-        self._git("add", "-A", env=env)
-        if self.commit:
-            self._git("commit", "-q", "-m", "fixture", env=env)
+            # No signing, and no hooks: the fixture is not under test.
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+        }
 
-    def _git(self, *args, env=None):
+    def git(self, *args):
+        """Run git in the fixture repository, failing the test if git fails."""
         proc = subprocess.run(
             ["git", "-C", str(self.path), *args],
-            capture_output=True, text=True, env=env,
+            capture_output=True, text=True, env=self.git_env,
         )
         if proc.returncode != 0:
             raise AssertionError(f"git {args} failed: {proc.stderr}")
+        return proc
+
+    def git_stage_all(self):
+        """Stage everything. Note this re-stages paths just removed from the
+        index but still present on disk, so it must not follow a `git rm
+        --cached` — that would undo the removal and leave nothing to commit."""
+        return self.git("add", "-A")
+
+    def git_commit(self, message="fixture"):
+        return self.git("commit", "-q", "-m", message)
 
     def run_verifier(self):
         return subprocess.run(
@@ -246,10 +271,8 @@ class ExitCodeTests(VerifierFixture):
         repo = self.make_repo(files=healthy_files())
         with repo.path.joinpath("NOTICE").open("w") as handle:
             handle.write("")
-        subprocess.run(["git", "-C", str(repo.path), "add", "-A"],
-                       capture_output=True, check=True)
-        subprocess.run(["git", "-C", str(repo.path), "commit", "-q", "-m", "x"],
-                       capture_output=True, check=True)
+        repo.git_stage_all()
+        repo.git_commit("empty the notice")
         proc = repo.run_verifier()
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("verdict: FAIL (1 of 7 criteria failed)", proc.stdout)
@@ -460,10 +483,8 @@ class NoEnvTrackedTests(VerifierFixture):
 
         # The directory stays on disk — that is the point of untracking — and
         # only stops being tracked. Tracked and ignored are independent.
-        subprocess.run(["git", "-C", str(repo.path), "rm", "-r", "--cached",
-                        "-q", "venv"], capture_output=True, check=True)
-        subprocess.run(["git", "-C", str(repo.path), "commit", "-q", "-m",
-                        "untrack"], capture_output=True, check=True)
+        repo.git("rm", "-r", "--cached", "-q", "venv")
+        repo.git_commit("untrack")
         self.assertTrue((repo.path / "venv" / "bin" / "python").exists())
 
         result = verify_baseline.check_no_env_tracked(
@@ -776,10 +797,8 @@ class NoRealDataTests(VerifierFixture):
         report = repo.path / "reports" / "aggregate.json"
         report.parent.mkdir(exist_ok=True)
         report.write_text("{}\n")
-        subprocess.run(["git", "-C", str(repo.path), "add", "-A"],
-                       capture_output=True, check=True)
-        subprocess.run(["git", "-C", str(repo.path), "commit", "-q", "-m", "x"],
-                       capture_output=True, check=True)
+        repo.git_stage_all()
+        repo.git_commit("add run output")
         result = verify_baseline.check_no_real_data(
             verify_baseline.Repository(repo.path))
         self.assertEqual(result.status, "fail")
