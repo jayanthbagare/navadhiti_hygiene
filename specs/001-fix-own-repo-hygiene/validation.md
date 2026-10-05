@@ -206,9 +206,39 @@ Two further facts fall out of the same query:
 - The repository is still **public**. FR-026 holds: nothing in this milestone
   touched visibility.
 - Dependabot **security** updates are already enabled. Dependabot **version**
-  updates from `.github/dependabot.yml` are a separate switch, and GitHub exposes
-  no API field for it. That is the concrete reason the verifier reports
-  `configured` rather than `active`, and it is recorded as a human action.
+  updates appeared to be a separate switch with no API field. That is the
+  concrete reason the verifier reports `configured` rather than `active`.
+
+### Correction — version updates are active, and the earlier claim was wrong
+
+The second bullet above was written before PR #37 was merged, and it was wrong in
+its conclusion. Once `.github/dependabot.yml` reached `main` at 08:41:52,
+Dependabot opened its first update pull requests at 08:42:52 — about a minute
+later — and by the end of the day had opened five:
+
+| PR | Dependency |
+| :--- | :--- |
+| [#42](https://github.com/jayanthbagare/navadhiti_hygiene/pull/42) | `requests>=2.34.2` |
+| [#41](https://github.com/jayanthbagare/navadhiti_hygiene/pull/41) | `pydantic>=2.13.5` |
+| [#40](https://github.com/jayanthbagare/navadhiti_hygiene/pull/40) | `pre-commit>=4.6.2` |
+| [#39](https://github.com/jayanthbagare/navadhiti_hygiene/pull/39) | `PyYAML>=6.0.3` |
+| [#38](https://github.com/jayanthbagare/navadhiti_hygiene/pull/38) | `pytest>=9.1.1` |
+
+The configuration file alone was sufficient. No manual enabling step was needed,
+so the "enable version updates manually" item that stood in the README,
+`CONFIDENTIALITY.md` and this record was an unnecessary human action, and has been
+removed in all three.
+
+**The verifier's behaviour is deliberately unchanged.** It still reports
+`configured` and never `active`. A criterion that reads one file from inside a
+checkout cannot see whether Dependabot is switched on, and that will remain true
+in every future clone — so the honest output does not change. What changed is a
+dated, human-observed fact, recorded in `CONFIDENTIALITY.md` where a person
+maintains it, not baked into a check that cannot support the claim.
+
+This is the failure Principle 3 warns about, in the direction nobody expects:
+being *too* cautious can be as wrong as being too confident, if the caution gets
+written down as a required human step that nobody needs to perform.
 
 ### Two defects this run found that a local run could not
 
