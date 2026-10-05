@@ -1,3 +1,17 @@
+# Runtime dependencies.
 pydantic>=2.0.0
 PyYAML>=6.0
 requests>=2.0.0
+
+# --- development / test tooling -----------------------------------------
+# Declared in this same file rather than a sibling requirements-dev.txt so
+# that Dependabot's pip ecosystem, configured for directory "/", discovers
+# them unambiguously (research.md D3). This tool has no production install
+# profile: it runs from a checkout inside a virtual environment.
+#
+#   pytest          — the declared test runner; `pytest` runs the whole suite
+#   pre-commit      — runs the commit-time secret guard (FR-017)
+#   detect-secrets  — the secret detector that guard invokes
+pytest>=7.0
+pre-commit>=3.0
+detect-secrets>=1.5.0

@@ -1,0 +1,21 @@
+Navadhiti — Internal Use Notice
+===============================
+
+This software is proprietary to Navadhiti. It was developed for Navadhiti's
+internal use in evaluating engineering governance.
+
+  Author:  Navadhiti
+  Use:     restricted to internal use
+
+This notice records authorship and restricted use. It deliberately does not
+grant, withhold, or define formal license terms. Navadhiti has not adopted a
+formal software license for this repository, and stating license terms here
+would invent a position that has not been taken.
+
+The data-handling decision governing what may be committed to this repository
+is recorded separately in CONFIDENTIALITY.md. The licensing position, the
+confidentiality policy, and the enforcement posture are three different things,
+and none of them substitutes for another.
+
+There is no LICENSE file, by design. A file named LICENSE would assert that
+license terms exist, and that assertion would be false.

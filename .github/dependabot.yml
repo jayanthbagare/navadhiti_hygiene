@@ -1,0 +1,30 @@
+# Automated dependency update scanning for this repository.
+#
+# The system checks other repositories for exactly this weakness through its
+# `security_baseline` check. This repository is held to the same standard.
+#
+# Note what this file does and does not prove: it proves dependency scanning is
+# *configured*. Whether Dependabot is switched on is a hosting-side fact with no
+# evidence in the repository, so tools/verify_baseline.py reports "configured"
+# and never "active". Enabling it is a named human action recorded in
+# CONFIDENTIALITY.md.
+#
+# Verified on 2026-10-05: this repository already has Dependabot *security*
+# updates enabled. The *version* updates configured below are a separate switch,
+# and GitHub exposes no API to confirm whether it is on — which is the practical
+# reason the verifier cannot.
+#
+# Single update entry because requirements.txt is a single flat file; adding a
+# second ecosystem here would create two sources of truth for the same
+# dependency set.
+
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
