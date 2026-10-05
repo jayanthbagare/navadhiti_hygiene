@@ -32,6 +32,17 @@ jobs:
     # check, not by hiding the failure inside a passing job.
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history on purpose. One assertion checks that the README's claim
+          # about the 1,989 environment files remaining in the three existing
+          # commits is still true, and it walks those trees. actions/checkout
+          # defaults to depth 1, where that assertion cannot run.
+          #
+          # The cost is about 12 MB rather than 300 KB — cheap for this
+          # repository. Do NOT "optimise" this back to a shallow checkout: it
+          # turns the claim into one nothing can check, which is the silent gap
+          # this workflow exists to prevent.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

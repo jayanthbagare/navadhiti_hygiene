@@ -981,6 +981,15 @@ class DocumentationTruthTests(unittest.TestCase):
     def test_the_history_residue_figure_is_still_true(self):
         # The other direction: if history is ever purged, 1,989 stops being the
         # truth and the README must stop claiming it.
+        shallow = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, check=True).stdout.strip()
+        if shallow == "true":
+            self.skipTest(
+                "shallow clone: the three pre-milestone commits are not present, "
+                "so the history residue cannot be counted. CI checks this with "
+                "fetch-depth: 0; run `git fetch --unshallow` to check it locally.")
+
         proc = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "rev-list", "--all"],
             capture_output=True, text=True, check=True)
