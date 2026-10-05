@@ -15,6 +15,7 @@ it would make the check fail against its own test suite.
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -889,6 +890,164 @@ class GeneratedOutputTests(VerifierFixture):
         self.assertTrue((sandbox / "reports" / "aggregate.json").is_file())
         history = list((sandbox / "reports" / "history").glob("*-aggregate.json"))
         self.assertEqual(len(history), 1, history)
+
+
+class DocumentationTruthTests(unittest.TestCase):
+    """Figures and claims in the documentation, checked against reality.
+
+    Milestone 0's own lesson: the docs claimed a clone tracks 68 files and that
+    107 tests pass, and both went stale the moment a later commit changed either
+    number. Nothing caught it, because a number written in prose is a claim, not
+    a control. These assertions are that control.
+
+    They fail on purpose when the numbers move. Updating a figure in the README
+    alongside the code that changed it is cheap; discovering a false claim in the
+    README from a fresh contributor is not.
+    """
+
+    README = REPO_ROOT / "README.md"
+    GUIDE = REPO_ROOT / "USAGE_AND_TECHNICAL_GUIDE.md"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.readme = cls.README.read_text(encoding="utf-8")
+        cls.guide = cls.GUIDE.read_text(encoding="utf-8")
+        cls.repo = verify_baseline.Repository(REPO_ROOT)
+        cls.tracked_count = len(cls.repo.tracked_files())
+        collected = subprocess.run(
+            [sys.executable, "-m", verify_baseline.TEST_RUNNER,
+             "--collect-only", "-q", "-p", "no:cacheprovider"],
+            capture_output=True, text=True, cwd=REPO_ROOT,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        match = re.search(r"(\d+) tests? collected", collected.stdout)
+        cls.test_count = int(match.group(1)) if match else -1
+
+    def _assert_figure(self, text, document, pattern, expected, what):
+        found = re.search(pattern, text)
+        self.assertIsNotNone(
+            found, f"{document} no longer states {what}; update the test, or "
+                   f"the claim was removed")
+        self.assertEqual(
+            int(found.group(1)), expected,
+            f"{document} says {found.group(1)} {what}, but reality is "
+            f"{expected}. Update the figure in the same change that moved it.")
+
+    def test_the_readme_test_count_is_labelled_as_captured_not_live(self):
+        # Deliberately not asserting the exact test count. It moves every time a
+        # test is added, and a check that fails on every PR that adds a test
+        # gets disabled or ignored — at which point it protects nothing and
+        # costs only friction. Instead the pasted sample must be labelled a
+        # capture, so its figures cannot be read as a live claim. That is the
+        # property worth holding, and it does not rot.
+        self.assertIn(
+            "Captured output", self.readme,
+            "the pasted verifier output in README.md must be labelled as a "
+            "capture with a date, or its counts read as a live claim")
+        self.assertRegex(
+            self.readme, r"Captured output[^\n]*\d{4}-\d{2}-\d{2}",
+            "the capture label must carry a date")
+        self.assertIn(
+            "counts move", self.readme.lower(),
+            "the README must say the figures in the capture are not current")
+
+    def test_every_tracked_file_count_in_prose_is_the_real_one(self):
+        # Wherever the README states a tracked-file count as prose — not inside a
+        # labelled code block — it has to be the current one. This is the exact
+        # rot the milestone cleaned up: the figure went stale twice because
+        # nothing checked it.
+        for chunk in self.readme.split("```")[::2]:  # text between code fences
+            for claim in re.finditer(r"(\d+) tracked files", chunk):
+                self.assertEqual(
+                    int(claim.group(1)), self.tracked_count,
+                    f"README states '{claim.group(1)} tracked files' in prose; "
+                    f"reality is {self.tracked_count}")
+
+    def test_the_roadmap_states_the_current_clone_size(self):
+        roadmap = re.search(r"\| \*\*Environment Untracked\*\*.*", self.readme)
+        self.assertIsNotNone(roadmap, "README roadmap lost its Environment row")
+        self.assertRegex(
+            roadmap.group(0), rf"A fresh clone tracks {self.tracked_count} files",
+            "the roadmap's clone-size figure has gone stale")
+
+    def test_the_documented_clone_size_matches_reality(self):
+        self._assert_figure(
+            self.readme, "README.md", r"A fresh clone tracks (\d+) files",
+            self.tracked_count, "files")
+        self._assert_figure(
+            self.guide, "USAGE_AND_TECHNICAL_GUIDE.md",
+            r"clone tracks (\d+) files", self.tracked_count, "files")
+
+    def test_the_history_residue_figure_is_still_true(self):
+        # The other direction: if history is ever purged, 1,989 stops being the
+        # truth and the README must stop claiming it.
+        proc = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-list", "--all"],
+            capture_output=True, text=True, check=True)
+        paths = set()
+        for sha in proc.stdout.split():
+            tree = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "ls-tree", "-r", "--name-only", sha],
+                capture_output=True, text=True, check=True)
+            paths.update(p for p in tree.stdout.splitlines() if p.startswith("venv/"))
+        claim = re.search(r"shows ([\d,]+) environment files", self.readme)
+        self.assertIsNotNone(claim)
+        self.assertEqual(
+            int(claim.group(1).replace(",", "")), len(paths),
+            f"README claims {claim.group(1)} environment files remain in "
+            f"history; git says {len(paths)}")
+
+    def test_no_placeholder_organisation_names_in_the_documentation(self):
+        # FR-006. "mock-org" and friends would mean the docs were written against
+        # an imaginary repository.
+        for name, text in (("README.md", self.readme),
+                           ("USAGE_AND_TECHNICAL_GUIDE.md", self.guide)):
+            for placeholder in ("mock-org", "mock_org", "example-org",
+                                "your-org", "cd hygiene"):
+                self.assertNotIn(
+                    placeholder, text,
+                    f"{name} contains the placeholder {placeholder!r}")
+
+    def test_the_installation_commands_are_in_the_documented_order(self):
+        # FR-007. Every command in the installation section, in sequence.
+        section = re.search(
+            r"### 2\. Installation(.*?)###", self.readme, re.DOTALL)
+        self.assertIsNotNone(section, "README has no '### 2. Installation' section")
+        expected = [
+            "git clone https://github.com/jayanthbagare/navadhiti_hygiene.git",
+            "cd navadhiti_hygiene",
+            "python3 -m venv venv",
+            "source venv/bin/activate",
+            "pip install -r requirements.txt",
+        ]
+        positions = []
+        for command in expected:
+            at = section.group(1).find(command)
+            self.assertNotEqual(
+                at, -1, f"installation section is missing: {command}")
+            positions.append(at)
+        self.assertEqual(
+            positions, sorted(positions),
+            "installation commands are not in the order given; every one of "
+            "them is required to work as written")
+
+    def test_the_recovery_procedure_matches_what_the_untracking_actually_did(self):
+        # FR-011 / SC-011. The documented recovery must remove the paths that
+        # were actually tracked, or a contributor following it stays dirty.
+        removal = re.search(r"git rm -r --cached(.*?)```", self.readme, re.DOTALL)
+        self.assertIsNotNone(removal, "README has no untracking command")
+        documented = set(re.findall(r"[/\w.-]+__pycache__|\bvenv\b",
+                                    removal.group(1)))
+        self.assertIn("venv", documented)
+
+        env_dirs = {p.split("/")[0] for p in self.repo.tracked_files()
+                    if Path(p).name in verify_baseline.ENV_DIR_NAMES
+                    or any(part in verify_baseline.ENV_DIR_NAMES
+                           for part in Path(p).parts[:-1])}
+        self.assertEqual(
+            env_dirs, set(),
+            "an environment directory is tracked again; the recovery procedure "
+            "and the ignore rules need revisiting")
 
 
 class ReadOnlyTests(VerifierFixture):

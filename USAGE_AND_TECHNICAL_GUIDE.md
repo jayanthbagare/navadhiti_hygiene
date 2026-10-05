@@ -860,7 +860,7 @@ pip install -r requirements.txt
 ```
 
 The environment directory is created locally and is never tracked — a fresh
-clone tracks 68 files, not the 2,033 this repository once carried. A clone made
+clone tracks 69 files, not the 2,033 this repository once carried. A clone made
 before the ignore rules existed needs the one-command recovery in the README
 ("If you have an existing clone"); it removes the environment from the index
 only, leaving the working copy intact.
