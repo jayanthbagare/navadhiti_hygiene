@@ -183,6 +183,10 @@ secret guard configured, the confidentiality record present and linked, and no
 real Navadhiti data committed.
 
 ```text
+Captured output — 2026-10-05, at the merge of the milestone that introduced it.
+The counts move; run the command above for current figures. The criterion shapes
+below do not.
+
 navadhiti hygiene — repository baseline
 commit: 1e2d98eba80c81501a5ffe193af455155b2e2bb4
 
@@ -320,7 +324,7 @@ command confirms, not a claim.
 | **Automated Baseline Run** | ✅ Live, non-blocking | `.github/workflows/baseline.yml` runs on `pull_request` only and **must not be configured as a required status check** |
 | **Confidentiality Record** | ✅ Live | [`CONFIDENTIALITY.md`](CONFIDENTIALITY.md) — decision, date, accountable role, rationale, concrete exclusions, accepted exposures, revisit triggers |
 | **No Real Data Enforced** | ✅ Live | `no-real-data` criterion: denied-identifier denylist plus structural rules, by content rather than by directory |
-| **Environment Untracked** | ✅ Live, with history residue | **The committed virtual environment remains in the three existing commits, by decision.** A fresh clone tracks 68 files instead of 2,033, but `git log --stat` still shows 1,989 environment files, and that was a choice — see the next section |
+| **Environment Untracked** | ✅ Live, with history residue | **The committed virtual environment remains in the three existing commits, by decision.** A fresh clone tracks 69 files instead of 2,033, but `git log --stat` still shows 1,989 environment files, and that was a choice — see the next section |
 
 #### Why the environment is still in history
 
