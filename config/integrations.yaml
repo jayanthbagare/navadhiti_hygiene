@@ -15,12 +15,22 @@ timesheet_system:
 # undefined_standard ("standard not yet defined org-wide") and never
 # fails repos. The optional existence-verification call is Jira-shaped:
 # GET {api_url}/issue/{key} with a Bearer token.
+# The host below is a placeholder: the real tenant domain is supplied by
+# whoever operates the system and is never committed (see CONFIDENTIALITY.md).
 # ticketing_system:
 #   type: "jira"
-#   api_url: "https://navadhiti.atlassian.net/rest/api/3"
+#   api_url: "https://example-tenant.atlassian.net/rest/api/3"
 #   token_env: "TICKETING_TOKEN"
 
 email_scanner:
   type: "office365" # placeholder
-  mailbox: "releases@navadhiti.com"
+  # The mailbox below is a placeholder, not an address. A real mailbox is
+  # supplied by whoever operates the system and is never committed — this
+  # address is the exact target a mailbox grant would be scoped to, so it
+  # must not be a live one. `.invalid` is reserved by RFC 2606 and can never
+  # resolve. Point the operator at the real mailbox in their own
+  # configuration before enabling the email sign-off tier; until then the
+  # transitional sign-off reports `method: none` honestly rather than
+  # pretending the mailbox worked. See CONFIDENTIALITY.md.
+  mailbox: "signoffs@example.invalid"
   # auth should be set via env var: EMAIL_CLIENT_SECRET
