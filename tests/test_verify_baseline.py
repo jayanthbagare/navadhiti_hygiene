@@ -805,6 +805,43 @@ class NoRealDataTests(VerifierFixture):
         self.assertIn("reports/aggregate.json  generated run output is tracked",
                       result.evidence)
 
+    def test_live_metadata_in_any_block_is_caught(self):
+        # Issue #44. The rule used to be scoped to the `repos:` block, so a live
+        # budget under `overrides:` passed. FR-023 forbids real project names
+        # with budgets without qualification.
+        for block in ("overrides:", "archive:", "anything_else:"):
+            result = self.check(verify_baseline.check_no_real_data, {
+                "config/projects.yaml": PROJECTS_YAML + (
+                    f'{block}\n  "navadhiti/service-a":\n    budget: 150000.0\n'),
+            })
+            self.assertEqual(result.status, "fail",
+                             f"a live budget under `{block}` must fail")
+            self.assertTrue(
+                any(e.startswith("config/projects.yaml:") and e.endswith("budget")
+                    for e in result.evidence), result.evidence)
+
+    def test_the_legitimate_overrides_entry_is_not_a_false_positive(self):
+        # The real config/ projects.yaml carries `overrides:` with only
+        # activity_window_days. Widening the rule must not trip on it.
+        result = self.check(verify_baseline.check_no_real_data, {
+            "config/projects.yaml": PROJECTS_YAML + (
+                'overrides:\n  "navadhiti/legacy-maintenance":\n'
+                '    activity_window_days: 120\n'),
+        })
+        self.assertEqual(result.status, "pass")
+
+    def test_a_missing_projects_config_is_not_a_data_violation(self):
+        # Nothing to scan means nothing to violate. Absent-ness is reported by
+        # the criterion that owns the file, not invented here.
+        result = self.check(verify_baseline.check_no_real_data,
+                            {"config/projects.yaml": None}, replace=True)
+        self.assertEqual(result.status, "pass")
+
+    def test_the_real_projects_config_passes(self):
+        result = verify_baseline.check_no_real_data(
+            verify_baseline.Repository(REPO_ROOT))
+        self.assertEqual(result.status, "pass", result.detail)
+
     def test_a_denied_identifier_is_caught_by_content_not_by_directory(self):
         # A denied identifier in a file the scanner would otherwise treat as
         # documentation is still a violation.

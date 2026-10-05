@@ -104,8 +104,18 @@ Seeded from FR-024 with two entries: the real Office365 mailbox address and the 
 | Rule | Fail condition |
 | :--- | :--- |
 | Generated output | Any tracked path under `reports/`. |
-| Live project metadata | Any uncommented entry under `repos:` in `config/projects.yaml` carrying `budget`, `headcount`, or `timesheet_code`. |
+| Live project metadata | Any uncommented `budget`, `headcount`, or `timesheet_code` anywhere in `config/projects.yaml`. |
 | Stale exposure | An `AcceptedExposure` listed in `CONFIDENTIALITY.md` whose identifier no longer appears in tracked content. |
+
+> **Amended 2026-10-05 (issue #44), approved by the contract owner.** The live
+> project metadata rule previously read "any uncommented entry under `repos:`
+> …". Implemented literally, that left a live `budget:` under `overrides:` passing
+> — narrower than FR-023, which forbids real project names with budgets without
+> qualification. The rule is now scoped to the file rather than to one block
+> within it. No false positive is introduced: `overrides:` legitimately holds
+> `activity_window_days`, which is not one of the three keys. The rule still asks
+> whether a key is *commented*, never which file it sits in, so FR-030 compliance
+> is unchanged.
 
 The stale-exposure rule exists because an accepted exposure is a gap in the denylist. If the identifier it covers disappears, the exposure should disappear too — otherwise the record claims protection it no longer provides.
 
