@@ -1,7 +1,7 @@
 # Validation Record — Milestone 0 Own-Repository Baseline
 
 **Date**: 2026-10-05 | **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
-**Branch**: `001-fix-own-repo-hygiene` at `ff417dc` | **Task**: T035, T036
+**Branch**: `001-fix-own-repo-hygiene`, PR [#37](https://github.com/jayanthbagare/navadhiti_hygiene/pull/37) | **Task**: T035, T036
 
 Every scenario in [quickstart.md](./quickstart.md) was executed. Results below
 are what actually happened, including two places where the quickstart itself was
@@ -21,7 +21,7 @@ wrong and is annotated as such.
 | 6 | Secret guard blocks a token | blocked, and the documented bypass works | **PASS with a correction** — the `nextline` bypass does not work |
 | 7 | Existing clone reaches a clean state | clean, environment intact | **PASS** — 2,033 → 68 tracked, `venv/` untouched |
 | 8 | Documentation tells the truth | no placeholder names, real URL, record linked | **PASS** |
-| 9 | Automated run, no local setup | job runs, same verdict, does not block | **Verified after push** — see below |
+| 9 | Automated run, no local setup | job runs, same verdict, does not block | **PASS** — run 37281056850, `success`, identical verdict, no required checks |
 | 10 | Dependency scanning configured | `version: 2`, `pip` present, reports `configured` | **PASS** |
 
 **Definition of done** (T036): `verdict: PASS (7 of 7 criteria passed)`, exit
@@ -171,8 +171,16 @@ Satisfies SC-005, SC-006, SC-008, SC-009, SC-010, SC-012, FR-006, FR-007, FR-008
 
 ## 9 — Automated run, no local setup
 
-Verified after the pull request was opened; see the record appended to the PR.
-The finding relevant to FR-033:
+**Run `37281056850` on PR #37, commit `67112ea`, `conclusion: success`.**
+
+| Expectation | Result |
+| :--- | :--- |
+| The `baseline` job runs with no local setup by the contributor | yes — a clean checkout, `pip install -r requirements.txt`, `python tools/verify_baseline.py` |
+| Its verdict matches Scenario 3 on the same commit | yes — CI `PASS (7 of 7)`, `113 tests passed`; local on the same commit, identical |
+| The pull request merges even when the job reports failure | yes — `main` has no protection and there are no rulesets, so there are zero required status checks |
+
+FR-034 satisfied: the same command produced the same verdict in both places,
+with no contributor-side setup.
 
 ```text
 GET /repos/jayanthbagare/navadhiti_hygiene/branches/main/protection
@@ -185,12 +193,13 @@ GET /repos/jayanthbagare/navadhiti_hygiene
   → visibility: public, default_branch: main
   → security_and_analysis.dependabot_security_updates: enabled
   → security_and_analysis.secret_scanning: enabled
+
+PR #37 → mergeable=MERGEABLE state=CLEAN
 ```
 
-`main` carries **no protection** and the repository has **no rulesets**, so there
-are zero required status checks and the advisory `baseline` job cannot be gating.
-That satisfies FR-033 for T034 — a workflow that is silently a required check is
-the failure that requirement exists to prevent, and it is not the case.
+The first two answers settle T034: there are **no required status checks at
+all**, so the advisory `baseline` job provably cannot be gating. That is exactly
+the condition FR-033 exists to protect, and it holds.
 
 Two further facts fall out of the same query:
 
@@ -200,6 +209,34 @@ Two further facts fall out of the same query:
   updates from `.github/dependabot.yml` are a separate switch, and GitHub exposes
   no API field for it. That is the concrete reason the verifier reports
   `configured` rather than `active`, and it is recorded as a human action.
+
+### Two defects this run found that a local run could not
+
+Worth recording, because both are the kind of failure that a green local suite
+hides and a reviewer would otherwise have had to find.
+
+**1. The count parser read pytest's summary line in the wrong order.** pytest
+orders that line by outcome and the order is not fixed — `113 passed in 12.51s`
+on a green run, `3 failed, 110 passed` on a red one. The counts were anchored
+with `^(\d+) passed`, so whichever count did not come first read as `0`. The
+first CI failure therefore announced itself as *"3 failed, 0 errors, 0 passed"*,
+which reads like nothing had run at all. Counts are now read wherever they appear
+in the last summary line. The criterion also now lists the failing `FAILED` node
+ids, because the runner's output was being captured and discarded, so "3 failed"
+was all a reader got.
+
+**2. Three tests relied on the developer's global git identity.** They created a
+fixture repository and committed through a raw subprocess call that inherited the
+ambient environment. A developer machine almost always has `user.name` and
+`user.email` in its *global* git config, so the commit succeeded by accident. A CI
+runner has neither and refuses with "Please tell me who you are".
+
+All git calls in the tests now go through one helper that pins the author and
+committer identity and points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at
+`/dev/null`, so the result cannot depend on whose machine it ran on. Verified by
+re-running the full suite with `HOME` pointed at an empty directory and both git
+config files disabled: **113 passed**, the same as a normal environment. The
+previous version fails that way.
 
 ## 10 — Dependency scanning is configured
 
