@@ -394,17 +394,28 @@ def check_test_suite(repo: Repository) -> CriterionResult:
         )
 
     output = f"{proc.stdout}\n{proc.stderr}"
-    passed = _count(r"(?m)^(\d+) passed", output)
-    failed = _count(r"(?m)^(\d+) failed", output)
-    errors = _count(r"(?m)^(\d+) error", output)
+    counts = _pytest_counts(output)
+    passed = counts["passed"]
+    failed = counts["failed"]
+    errors = counts["errors"]
 
     if proc.returncode != 0:
+        # Name the tests that failed. "3 failed" tells a reader nothing they
+        # can act on, and the runner's own output is captured rather than
+        # printed. Test IDs are paths, so this stays inside the rule that no
+        # output field carries a detected value.
+        evidence = _failed_test_ids(output)
+        if not evidence:
+            evidence = (f"no test IDs in the runner output; run "
+                        f"`{Path(sys.executable).name} -m {TEST_RUNNER} -q` "
+                        f"in {repo.root.name}/ to see it yourself",)
         return CriterionResult(
             criterion_id="test-suite",
             status=STATUS_FAIL,
             detail=(
                 f"'{TEST_RUNNER}' exited {proc.returncode}: "
                 f"{failed} failed, {errors} errors, {passed} passed"),
+            evidence=evidence,
             observed={"runner": TEST_RUNNER, "installed": True,
                       "passed": passed, "failed": failed, "errors": errors,
                       "exit_code": proc.returncode},
@@ -417,9 +428,32 @@ def check_test_suite(repo: Repository) -> CriterionResult:
     )
 
 
-def _count(pattern: str, text: str) -> int:
-    match = re.search(pattern, text)
-    return int(match.group(1)) if match else 0
+def _pytest_counts(output: str) -> dict[str, int]:
+    """Read the counts out of pytest's summary line.
+
+    pytest orders that line by outcome and the order is not fixed: `107 passed`
+    alone, or `3 failed, 104 passed, 1 warning in 20.31s`. Anchoring the pattern
+    at the start of a line silently reads 0 for whichever count does not come
+    first, so every count is searched for anywhere in the last summary line.
+    """
+    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    for line in reversed(output.splitlines()):
+        if not re.search(r"\b\d+\s+(passed|failed|error)", line):
+            continue
+        for number, label in re.findall(r"(\d+)\s+(passed|failed|errors?|skipped)", line):
+            key = {"error": "errors", "errors": "errors"}.get(label, label)
+            counts[key] = int(number)
+        break
+    return counts
+
+
+def _failed_test_ids(output: str, limit: int = 12) -> tuple[str, ...]:
+    """The `FAILED <nodeid>` lines pytest prints, in order, capped."""
+    ids = re.findall(r"(?m)^FAILED\s+(\S+)", output)
+    if len(ids) > limit:
+        remaining = len(ids) - limit
+        ids = ids[:limit] + [f"... and {remaining} more"]
+    return tuple(ids)
 
 
 def check_licensing_artifact(repo: Repository) -> CriterionResult:

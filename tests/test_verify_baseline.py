@@ -610,6 +610,41 @@ class SecretGuardTests(VerifierFixture):
         self.assertIn(".secrets.baseline", result.detail)
 
 
+class PytestOutputParsingTests(unittest.TestCase):
+    """The runner's summary line is not a fixed format, and getting it wrong
+    makes a failure report "0 passed", which reads like nothing ran."""
+
+    def test_counts_are_found_in_any_order(self):
+        for line, expected in [
+            ("107 passed in 20.31s", 107),
+            ("3 failed, 104 passed, 1 warning in 20.31s", 104),
+            ("45 passed, 1 skipped in 2.00s", 45),
+            ("1 failed, 2 errors, 5 passed in 1.00s", 5),
+            ("", 0),
+        ]:
+            self.assertEqual(
+                verify_baseline._pytest_counts(line)["passed"], expected, line)
+
+    def test_failures_and_errors_are_counted_separately(self):
+        counts = verify_baseline._pytest_counts("1 failed, 2 errors, 5 passed")
+        self.assertEqual(counts["failed"], 1)
+        self.assertEqual(counts["errors"], 2)
+
+    def test_the_last_summary_line_wins_over_progress_output(self):
+        output = "3 failed\n107 passed, 3 failed in 9.00s\n"
+        self.assertEqual(verify_baseline._pytest_counts(output)["passed"], 107)
+
+    def test_failing_test_ids_are_extracted_in_order_and_capped(self):
+        output = "\n".join(
+            f"FAILED tests/test_x.py::test_{i} - AssertionError" for i in range(20))
+        ids = verify_baseline._failed_test_ids(output, limit=5)
+        # Just the node id: the trailing "- AssertionError..." is prose, and a
+        # node id is something that can be run and re-read.
+        self.assertEqual(ids[0], "tests/test_x.py::test_0")
+        self.assertEqual(len(ids), 6)
+        self.assertIn("and 15 more", ids[-1])
+
+
 class TestSuiteCriterionTests(VerifierFixture):
     def test_a_green_suite_passes_and_reports_the_count(self):
         result = self.check(verify_baseline.check_test_suite, {})
@@ -622,6 +657,22 @@ class TestSuiteCriterionTests(VerifierFixture):
         })
         self.assertEqual(result.status, "fail")
         self.assertIn("1 failed", result.detail)
+
+    def test_a_failing_suite_names_which_tests_failed(self):
+        # "3 failed" tells a reader nothing they can act on, and the runner's
+        # output is captured rather than printed.
+        result = self.check(verify_baseline.check_test_suite, {
+            "tests/test_fixture.py": (
+                "def test_one():\n    assert False\n\n\n"
+                "def test_two():\n    assert False\n"),
+        })
+        self.assertEqual(result.status, "fail")
+        self.assertTrue(any("test_one" in e for e in result.evidence), result.evidence)
+        self.assertTrue(any("test_two" in e for e in result.evidence), result.evidence)
+
+    def test_a_green_suite_reports_a_nonzero_passed_count(self):
+        result = self.check(verify_baseline.check_test_suite, {})
+        self.assertGreater(result.observed["passed"], 0)
 
     def test_a_suite_with_no_tests_is_a_failure_not_a_silent_pass(self):
         result = self.check(verify_baseline.check_test_suite,
