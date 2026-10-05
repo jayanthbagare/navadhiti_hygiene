@@ -265,20 +265,28 @@ Not fixed here, because fixing either would mean inventing a standard or a scope
 that this milestone does not hold. Recorded so they are decisions rather than
 accidents.
 
-1. **`quickstart.md` Scenario 5 conflicts with the CLI contract.** The scenario's
-   procedure cannot produce exit `2` while the contract requires cwd-independence.
-   Amendment needed; the contract is correct as written.
+1. **`quickstart.md` Scenario 5 conflicted with the CLI contract.** The scenario's
+   procedure could not produce exit `2` while the contract requires
+   cwd-independence. **Now amended** — it copies the script outside a repository
+   and separately checks that cwd does not change the verdict, both verified. The
+   contract was correct as written and was not changed. `research.md` D4 and
+   `tasks.md` T021, which both offered the non-working `nextline` bypass, are
+   annotated with the correction; `README.md` carries the operative version.
 
 2. **The `nextline` allowlist pragma does not work through the pre-commit hook**
-   (§6). Documented in the README as a non-working form. If `detect-secrets` fixes
-   it, the README note should be removed.
+   (§6). `research.md` D4 and `tasks.md` T021 are annotated with the correction,
+   and `quickstart.md` Scenario 6 now offers only the two bypasses that work.
+   `README.md` states plainly that the documented `nextline` form fails. If
+   `detect-secrets` fixes it, those annotations should be removed.
 
 3. **`no-real-data` part 2 is scoped to the `repos:` block of
    `config/projects.yaml`,** exactly as `contracts/verify-baseline-cli.md`
    specifies. A `budget:` uncommented under the `overrides:` block would therefore
    pass. Widening the check to every mapping in the file would close the gap with
-   no false positives, but it is a change to a signed contract and needs the
-   contract's owner, not an implementer.
+   no false positives — `overrides:` legitimately holds `activity_window_days`,
+   which is not a live-metadata key — but it is a change to a signed contract and
+   belongs to the contract's owner, not to an implementer. **This is the one
+   carried-forward finding with a ready fix and no authority to apply it.**
 
 4. **The constitution is still unratified.** `.specify/memory/constitution.md` is
    the unmodified template, so the plan's constitution gate ran provisionally

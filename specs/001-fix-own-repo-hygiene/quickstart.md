@@ -92,13 +92,30 @@ Re-run and confirm `exit=0` again — the check is idempotent (FR-034).
 
 *Validates the exit `1` / `2` split — the contract's core guarantee*
 
-Run the verifier from outside a repository:
+> **Amended after the validation run of 2026-10-05.** This scenario originally
+> read `cd /tmp && python /path/to/repo/tools/verify_baseline.py` and expected
+> `exit=2`. That procedure cannot produce that result, because the CLI contract
+> requires the verifier to resolve the repository root from its own location and
+> to work from any working directory. Run that way against a real checkout, it
+> correctly exits `0`. The contract is right and this scenario was wrong — a
+> verifier whose verdict depended on where you ran it would make local and CI
+> runs disagree, which FR-034 forbids. To get "outside a repository", copy the
+> script out:
 
 ```bash
-cd /tmp && python /path/to/navadhiti_hygiene/tools/verify_baseline.py; echo "exit=$?"
+mkdir -p /tmp/nh-outside/tools
+cp tools/verify_baseline.py /tmp/nh-outside/tools/
+python /tmp/nh-outside/tools/verify_baseline.py; echo "exit=$?"
 ```
 
 Expect `exit=2`, not `0` and not `1`. A caller must be able to tell "the repo is wrong" from "I could not look" without reading prose.
+
+For completeness, the cwd-independence case is its own check:
+
+```bash
+cd /tmp && python /path/to/navadhiti_hygiene/tools/verify_baseline.py >/dev/null; echo "exit=$?"
+# expect 0 — cwd must not change the verdict
+```
 
 ---
 
@@ -116,14 +133,25 @@ cp /tmp/standard.yaml.bak config/standard.yaml
 git reset
 ```
 
-Expect the commit to be **blocked**, naming the file and the detector. Expect the literal token **not** to be echoed back.
+Expect the commit to be **blocked**, naming the file, the line and the detector. Expect the literal token **not** to be echoed back.
 
-**False-positive bypass** (FR-019):
+**False-positive bypass** (FR-019) — the inline pragma, on the **same line** as
+the value:
 
 ```bash
 printf '\n# example only, not a credential: ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8  # pragma: allowlist secret\n' >> config/standard.yaml
 git add config/standard.yaml && git commit -m "allowlisted placeholder"
 ```
+
+> **Amended after the validation run of 2026-10-05.** This scenario also
+> offered `# pragma: allowlist nextline secret` on the line above the value.
+> **That form does not work.** `detect-secrets` v1.5.0 ships a regex that matches
+> it and `is_line_allowlisted()` returns `True` when handed that line as
+> `previous_line`, but the pre-commit hook path still blocks the commit. Verified
+> against five placements — no blank line above, blank line above, indented
+> inside a mapping, hyphenated spelling, and same-line — all blocked. Two bypasses
+> do work: the inline pragma above, and recording the finding in
+> `.secrets.baseline` via `detect-secrets scan > .secrets.baseline`.
 
 Expect the commit to **succeed**. That inline pragma is the documented bypass.
 
