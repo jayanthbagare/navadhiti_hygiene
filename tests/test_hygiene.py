@@ -7,7 +7,7 @@ implementations end-to-end: discovery, the six original dimensions,
 traceability, promotion streaks, report history archiving, and weight
 validation.
 
-Run: venv/bin/python -m unittest discover tests -v
+Run: pytest
 """
 
 import json
@@ -43,6 +43,43 @@ DAY = timedelta(days=1)
 # Current sprint containing NOW: 2026-08-24 .. 2026-09-06.
 CALENDAR = SprintCalendar(14, datetime(2026, 8, 24).date())
 CURRENT_SPRINT_ID = CALENDAR.sprint_containing(NOW.date()).sprint_id  # sprint-2026-08-24
+
+
+class FrozenDatetime(datetime):
+    """datetime whose "now" is a value this test controls.
+
+    The end-to-end fixtures write a sign-off artifact for the sprint
+    containing NOW, but core.sprint.current_sprint() resolves the sprint
+    containing the *real* current date. Once real time left that 14-day window,
+    the artifact stopped matching the current sprint and the suite began failing
+    on a calendar that had not changed — a time bomb, not a check regression.
+    Freezing every module that reads the wall clock makes the suite deterministic
+    on any run date, forever.
+
+    The frozen value advances one second per end-to-end run, because each run
+    writes its own reports/history/<timestamp>-aggregate.json and two runs
+    sharing a timestamp would overwrite one another.
+    """
+
+    frozen_now = NOW
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls.frozen_now if tz is None else cls.frozen_now.astimezone(tz)
+
+    @classmethod
+    def utcnow(cls):
+        return cls.frozen_now
+
+
+def tick_clock(seconds: int = 1) -> None:
+    """Advance the frozen clock so the next run gets a distinct timestamp."""
+    FrozenDatetime.frozen_now = FrozenDatetime.frozen_now + timedelta(seconds=seconds)
+
+
+# Modules whose "now" the end-to-end run depends on. master_agent is patched
+# separately, after its importlib.reload(), because a reload rebinds the name.
+FROZEN_CLOCK_MODULES = ("core.sprint", "core.promotion", "sub_agents.observer_agent")
 
 
 class FakeResponse:
@@ -667,6 +704,12 @@ class MasterEndToEndTests(unittest.TestCase):
         self._old_env = os.environ.get("GIT_TOKEN")
         os.environ["GIT_TOKEN"] = "test-token"
 
+        self._clock_patches = [patch(f"{mod}.datetime", FrozenDatetime)
+                               for mod in FROZEN_CLOCK_MODULES]
+        FrozenDatetime.frozen_now = NOW
+        for clock_patch in self._clock_patches:
+            clock_patch.start()
+
         self.fake = FakeGitHub()
         self.fake.add_repo("navadhiti/service-a", pushed_days_ago=2, created="2025-01-01T00:00:00Z")
         self.fake.add_repo("navadhiti/service-b", pushed_days_ago=5, created="2026-09-02T00:00:00Z")
@@ -710,6 +753,8 @@ class MasterEndToEndTests(unittest.TestCase):
         self.fake.releases["navadhiti/service-b"] = []
 
     def tearDown(self):
+        for clock_patch in reversed(self._clock_patches):
+            clock_patch.stop()
         os.chdir(self.old_cwd)
         if self._old_env is None:
             os.environ.pop("GIT_TOKEN", None)
@@ -719,6 +764,7 @@ class MasterEndToEndTests(unittest.TestCase):
 
     def _run_master(self, extra_args=None):
         extra_args = extra_args or []
+        tick_clock()  # each run needs its own history-archive timestamp
         with patch("sys.argv", ["master_agent.py"] + extra_args), \
                 patch("requests.Session.request") as mock_request:
             fake = self.fake
@@ -730,6 +776,10 @@ class MasterEndToEndTests(unittest.TestCase):
             import importlib
             import master_agent
             importlib.reload(master_agent)
+            # reload rebinds master_agent.datetime, so re-freeze after it
+            master_clock = patch("master_agent.datetime", FrozenDatetime)
+            master_clock.start()
+            self._clock_patches.append(master_clock)
             master = master_agent.MasterAgent()
             include_ids = [extra_args[i + 1] for i, a in enumerate(extra_args)
                            if a == "--include" and i + 1 < len(extra_args)]
