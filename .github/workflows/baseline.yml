@@ -1,0 +1,79 @@
+# Repository baseline verification, on every pull request (FR-032).
+#
+# This is the repository's first automated workflow, and it is deliberately
+# NOT a gate.
+#
+#   It runs on pull_request only. That covers branches from forks, which a
+#   push trigger would not.
+#
+#   It reports rather than blocks (FR-033). The step exits non-zero when the
+#   baseline does not hold, so a failing result is visibly red on the pull
+#   request — but this workflow must not be configured as a required status
+#   check on the default branch, or a red run would silently stop merges.
+#   That setting lives in repository settings, not in this file, which is why
+#   CONFIDENTIALITY.md records it as a human action to confirm.
+#
+#   Turning merge-blocking enforcement on is a later milestone and an explicit
+#   human decision. Adding it here would switch enforcement on by automation.
+
+name: baseline
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # No `continue-on-error` and no soft-fail wrapper: a broken baseline should
+    # look broken. FR-033 is achieved by this workflow not being a required
+    # check, not by hiding the failure inside a passing job.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install declared dependencies
+        # The verifier's test-suite criterion runs the declared runner, so the
+        # runner has to be installed before the verifier starts. One command,
+        # one verdict: there is no separate pytest job, because two jobs would
+        # mean two verdicts that could disagree.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Verify the repository baseline
+        id: verify
+        run: |
+          set -o pipefail
+          python tools/verify_baseline.py 2>&1 | tee baseline-output.txt
+
+      - name: Record the advisory result in the summary
+        # The verdict is carried into the job summary, not left in the build
+        # log, so a reviewer sees it without opening the run. The disclaimer is
+        # printed here as well as in the verifier's own output, so it survives
+        # someone truncating that output or reading only the job outcome.
+        if: always()
+        run: |
+          {
+            echo "## Repository baseline"
+            echo ""
+            echo "This run **reports**; it does not prevent merges."
+            echo ""
+            echo '```text'
+            cat baseline-output.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+            echo ""
+            echo "To reproduce this verdict locally, with no CI setup:"
+            echo ""
+            echo '```bash'
+            echo "pip install -r requirements.txt"
+            echo "python tools/verify_baseline.py"
+            echo '```'
+            echo ""
+            echo "this run reports only; it does not prevent merges"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,35 @@
+# Commit-time secret guard (FR-017..FR-020).
+#
+# detect-secrets runs through pre-commit, so a credential-shaped string in a
+# configuration file is blocked at commit time rather than discovered later.
+#
+#   pre-commit install      # once per clone
+#
+# Plugins and filters live in .secrets.baseline, not in this file or in source,
+# so adding a pattern never requires touching code. Every suppression is also
+# written to that file, which makes it a reviewable diff: a pull request that
+# suppresses something shows exactly what was suppressed.
+#
+# When a match is a legitimate placeholder, suppress that one line rather than
+# disabling the hook:
+#
+#   value: "ghp_example000..."  # pragma: allowlist secret
+#   # pragma: allowlist nextline secret
+#   value: "ghp_example000..."
+#
+# Both forms are documented in README.md.
+
+default_language_version:
+  python: python3
+
+repos:
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        # Scoped to the tracked configuration surface. This repository's secret
+        # exposure surface is four small YAML files, not a large codebase, and
+        # every one of them is guarded: an exclusion list here would be a hole
+        # in the control that exists only to be documented.
+        files: ^config/.*\.ya?ml$
